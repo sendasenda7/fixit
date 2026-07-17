@@ -227,29 +227,6 @@ def evaluer_artisan(request, offre_id):
     if offre.demande.client != request.user:
         return Response({'error': 'Non autorisé'}, status=status.HTTP_403_FORBIDDEN)
 
-    # Vérifie si déjà évalué
-    if Evaluation.objects.filter(client=request.user, artisan=offre.artisan).exists():
-        return Response({'error': 'Vous avez déjà évalué cet artisan'}, status=status.HTTP_400_BAD_REQUEST)
-
-    serializer = EvaluationSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save(client=request.user, artisan=offre.artisan)
-        # Marquer la demande comme terminée
-        offre.demande.statut = 'terminee'
-        offre.demande.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-def evaluer_artisan(request, offre_id):
-    try:
-        offre = Offre.objects.get(pk=offre_id, est_acceptee=True)
-    except Offre.DoesNotExist:
-        return Response({'error': 'Offre introuvable ou non acceptée'}, status=status.HTTP_404_NOT_FOUND)
-
-    if offre.demande.client != request.user:
-        return Response({'error': 'Non autorisé'}, status=status.HTTP_403_FORBIDDEN)
-
     if Evaluation.objects.filter(client=request.user, artisan=offre.artisan).exists():
         return Response({'error': 'Vous avez déjà évalué cet artisan'}, status=status.HTTP_400_BAD_REQUEST)
 
