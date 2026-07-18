@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import axios from 'axios';
 import artisanImg from '../assets/artisan.png';
 import { useAuth } from '../context/AuthContext';
 
@@ -137,7 +136,7 @@ const Login = () => {
             </motion.div>
           )}
 
-          <div style={styles.form}>
+          <form style={styles.form} onSubmit={handleSubmit}>
             {[
               { label: "Nom d'utilisateur", name: 'username', type: 'text', placeholder: 'Entrez votre nom' },
               { label: 'Mot de passe', name: 'password', type: 'password', placeholder: 'Entrez votre mot de passe' },
@@ -163,7 +162,7 @@ const Login = () => {
             ))}
 
             <motion.button
-              onClick={handleSubmit}
+              type="submit"
               style={loading ? styles.btnDisabled : styles.btn}
               disabled={loading}
               whileHover={!loading ? { scale: 1.03, backgroundColor: '#1557b0' } : {}}
@@ -171,7 +170,7 @@ const Login = () => {
             >
               {loading ? '⏳ Connexion...' : '🔐 Se connecter'}
             </motion.button>
-          </div>
+          </form>
 
           <Link to="/" style={styles.backLink}>← Retour à l'accueil</Link>
         </motion.div>

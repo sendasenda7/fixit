@@ -40,8 +40,17 @@ export const AuthProvider = ({ children }) => {
     window.location.href = '/';
   };
 
+  // Met à jour l'utilisateur en mémoire ET dans le localStorage (après édition du profil, changement de rôle, etc.)
+  const updateUser = (partialUser) => {
+    setUser((prev) => {
+      const updated = { ...prev, ...partialUser };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
+    <AuthContext.Provider value={{ user, login, register, logout, updateUser, loading }}>
       {children}
     </AuthContext.Provider>
   );

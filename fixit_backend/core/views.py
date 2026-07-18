@@ -4,6 +4,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError
 from .models import User, Demande, Offre, Evaluation
 from .serializers import (
     UserSerializer, RegisterSerializer,
@@ -70,6 +72,44 @@ def profile(request):
         serializer.save()
         return Response(serializer.data)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+    """Changement du mot de passe de l'utilisateur connecté"""
+    ancien = request.data.get('ancien_mot_de_passe')
+    nouveau = request.data.get('nouveau_mot_de_passe')
+
+    if not ancien or not nouveau:
+        return Response(
+            {'error': "L'ancien et le nouveau mot de passe sont requis"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    if not request.user.check_password(ancien):
+        return Response({'error': 'Ancien mot de passe incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(nouveau, user=request.user)
+    except ValidationError as e:
+        return Response({'error': e.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.set_password(nouveau)
+    request.user.save()
+    return Response({'message': 'Mot de passe mis à jour avec succès !'})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def delete_account(request):
+    """Suppression définitive du compte de l'utilisateur connecté"""
+    mot_de_passe = request.data.get('mot_de_passe')
+    if not mot_de_passe or not request.user.check_password(mot_de_passe):
+        return Response({'error': 'Mot de passe incorrect'}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.delete()
+    return Response({'message': 'Compte supprimé avec succès'}, status=status.HTTP_200_OK)
 
 
 # ================================

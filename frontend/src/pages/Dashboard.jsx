@@ -3,35 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import StarRating from '../components/StarRating';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
-
-// ===== COMPOSANT ÉTOILES =====
-const StarRating = ({ value, onChange, readOnly = false }) => {
-  const [hovered, setHovered] = useState(0);
-  return (
-    <div style={{ display: 'flex', gap: '6px' }}>
-      {[1, 2, 3, 4, 5].map(star => (
-        <motion.span
-          key={star}
-          style={{
-            fontSize: '32px',
-            cursor: readOnly ? 'default' : 'pointer',
-            filter: star <= (hovered || value) ? 'none' : 'grayscale(100%)',
-            opacity: star <= (hovered || value) ? 1 : 0.3,
-          }}
-          whileHover={!readOnly ? { scale: 1.3 } : {}}
-          whileTap={!readOnly ? { scale: 0.9 } : {}}
-          onMouseEnter={() => !readOnly && setHovered(star)}
-          onMouseLeave={() => !readOnly && setHovered(0)}
-          onClick={() => !readOnly && onChange && onChange(star)}
-        >⭐</motion.span>
-      ))}
-    </div>
-  );
-};
 
 // ===== COMPOSANT OFFRES PAR DEMANDE =====
 const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
@@ -111,7 +87,7 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
 // ===== DASHBOARD PRINCIPAL =====
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, updateUser } = useAuth();
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
@@ -122,6 +98,28 @@ const Dashboard = () => {
   const [evalForm, setEvalForm] = useState({ note: 0, commentaire: '' });
   const [evalSuccess, setEvalSuccess] = useState(false);
   const [evalLoading, setEvalLoading] = useState(false);
+
+  // Édition du profil
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({ email: '', telephone: '', adresse: '' });
+  const [profileError, setProfileError] = useState('');
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Changement de mot de passe
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ ancien_mot_de_passe: '', nouveau_mot_de_passe: '', confirmation: '' });
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Suppression de compte
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Notifications (préférences locales)
+  const [notifOffres, setNotifOffres] = useState(true);
+  const [notifMessages, setNotifMessages] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
@@ -158,19 +156,90 @@ const Dashboard = () => {
 
   const handleLogout = () => logout();
 
-  const demandesParMois = [
-    { mois: 'Jan', demandes: 2 }, { mois: 'Fév', demandes: 4 },
-    { mois: 'Mar', demandes: 3 }, { mois: 'Avr', demandes: 7 },
-    { mois: 'Mai', demandes: 5 }, { mois: 'Juin', demandes: demandes.length || 1 },
-  ];
+  const ouvrirEditionProfil = () => {
+    setProfileForm({
+      email: user.email || '',
+      telephone: user.telephone || '',
+      adresse: user.adresse || '',
+    });
+    setProfileError('');
+    setEditProfileOpen(true);
+  };
+
+  const enregistrerProfil = async () => {
+    setProfileLoading(true);
+    setProfileError('');
+    try {
+      const res = await api.put('/profile/', profileForm);
+      updateUser(res.data);
+      setEditProfileOpen(false);
+    } catch (err) {
+      const data = err.response?.data;
+      setProfileError(data ? Object.values(data)[0] : 'Une erreur est survenue. Réessayez !');
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const changerMotDePasse = async () => {
+    setPasswordError('');
+    if (passwordForm.nouveau_mot_de_passe !== passwordForm.confirmation) {
+      setPasswordError('Les nouveaux mots de passe ne correspondent pas !');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await api.post('/profile/password/', {
+        ancien_mot_de_passe: passwordForm.ancien_mot_de_passe,
+        nouveau_mot_de_passe: passwordForm.nouveau_mot_de_passe,
+      });
+      setPasswordModalOpen(false);
+      setPasswordForm({ ancien_mot_de_passe: '', nouveau_mot_de_passe: '', confirmation: '' });
+    } catch (err) {
+      const data = err.response?.data?.error;
+      setPasswordError(Array.isArray(data) ? data[0] : (data || 'Une erreur est survenue. Réessayez !'));
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const supprimerCompte = async () => {
+    setDeleteError('');
+    setDeleteLoading(true);
+    try {
+      await api.post('/profile/delete/', { mot_de_passe: deletePassword });
+      logout();
+    } catch (err) {
+      setDeleteError(err.response?.data?.error || 'Une erreur est survenue. Réessayez !');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  // Regroupe les demandes du client par mois réel de création (6 derniers mois)
+  const demandesParMois = (() => {
+    const now = new Date();
+    const moisLabels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const buckets = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ year: d.getFullYear(), month: d.getMonth(), mois: moisLabels[d.getMonth()], demandes: 0 });
+    }
+    demandes.forEach(d => {
+      const created = new Date(d.date_creation);
+      const bucket = buckets.find(b => b.year === created.getFullYear() && b.month === created.getMonth());
+      if (bucket) bucket.demandes += 1;
+    });
+    return buckets;
+  })();
 
   const demandesParService = [
-    { name: 'Plomberie', value: demandes.filter(d => d.type_service === 'plomberie').length || 3 },
-    { name: 'Électricité', value: demandes.filter(d => d.type_service === 'electricite').length || 2 },
-    { name: 'Peinture', value: demandes.filter(d => d.type_service === 'peinture').length || 1 },
-    { name: 'Réparation', value: demandes.filter(d => d.type_service === 'reparation').length || 2 },
-    { name: 'Autre', value: demandes.filter(d => d.type_service === 'autre').length || 1 },
-  ];
+    { name: 'Plomberie', value: demandes.filter(d => d.type_service === 'plomberie').length },
+    { name: 'Électricité', value: demandes.filter(d => d.type_service === 'electricite').length },
+    { name: 'Peinture', value: demandes.filter(d => d.type_service === 'peinture').length },
+    { name: 'Réparation', value: demandes.filter(d => d.type_service === 'reparation').length },
+    { name: 'Autre', value: demandes.filter(d => !['plomberie', 'electricite', 'peinture', 'reparation'].includes(d.type_service)).length },
+  ].filter(d => d.value > 0);
 
   const budgetParService = ['plomberie', 'electricite', 'peinture', 'reparation', 'autre'].map(type => ({
     service: type.charAt(0).toUpperCase() + type.slice(1),
@@ -262,6 +331,11 @@ const Dashboard = () => {
         <motion.div style={{ ...styles.chartCard, backgroundColor: theme.card }}
           initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
           <h3 style={{ ...styles.chartTitle, color: theme.text }}>🍩 Répartition par service</h3>
+          {demandesParService.length === 0 ? (
+            <div style={{ padding: '60px 0', textAlign: 'center', color: theme.subtext }}>
+              Pas encore de demandes à répartir
+            </div>
+          ) : (
           <ResponsiveContainer width="100%" height={220}>
             <PieChart>
               <Pie data={demandesParService} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
@@ -272,6 +346,7 @@ const Dashboard = () => {
               <Tooltip /><Legend />
             </PieChart>
           </ResponsiveContainer>
+          )}
         </motion.div>
       </div>
 
@@ -439,7 +514,8 @@ const Dashboard = () => {
               </div>
             </div>
           ))}
-          <motion.button style={styles.editBtn} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+          <motion.button style={styles.editBtn} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={ouvrirEditionProfil}>
             ✏️ Modifier le profil
           </motion.button>
         </motion.div>
@@ -508,15 +584,49 @@ const Dashboard = () => {
           {
             title: '🔔 Notifications',
             items: [
-              { label: 'Nouvelles offres', desc: 'Recevoir des notifications pour les nouvelles offres', action: <motion.div style={{ ...styles.toggle, backgroundColor: '#1a73e8' }}><motion.div style={{ ...styles.toggleKnob, left: '24px' }} /></motion.div> },
-              { label: 'Messages', desc: 'Notifications pour les nouveaux messages', action: <motion.div style={{ ...styles.toggle, backgroundColor: '#ccc' }}><motion.div style={styles.toggleKnob} /></motion.div> },
+              {
+                label: 'Nouvelles offres', desc: 'Recevoir des notifications pour les nouvelles offres',
+                action: (
+                  <motion.div style={{ ...styles.toggle, backgroundColor: notifOffres ? '#1a73e8' : '#ccc' }}
+                    onClick={() => setNotifOffres(!notifOffres)} whileTap={{ scale: 0.95 }}>
+                    <motion.div style={styles.toggleKnob} animate={{ x: notifOffres ? 22 : 2 }}
+                      transition={{ type: 'spring', stiffness: 500 }} />
+                  </motion.div>
+                )
+              },
+              {
+                label: 'Messages', desc: 'Notifications pour les nouveaux messages',
+                action: (
+                  <motion.div style={{ ...styles.toggle, backgroundColor: notifMessages ? '#1a73e8' : '#ccc' }}
+                    onClick={() => setNotifMessages(!notifMessages)} whileTap={{ scale: 0.95 }}>
+                    <motion.div style={styles.toggleKnob} animate={{ x: notifMessages ? 22 : 2 }}
+                      transition={{ type: 'spring', stiffness: 500 }} />
+                  </motion.div>
+                )
+              },
             ]
           },
           {
             title: '🔐 Sécurité',
             items: [
-              { label: 'Changer le mot de passe', desc: 'Mettre à jour votre mot de passe', action: <motion.button style={styles.settingBtn} whileHover={{ scale: 1.05 }}>Modifier</motion.button> },
-              { label: 'Supprimer le compte', desc: 'Supprimer définitivement votre compte', action: <motion.button style={{ ...styles.settingBtn, backgroundColor: '#ff5252' }} whileHover={{ scale: 1.05 }}>Supprimer</motion.button> },
+              {
+                label: 'Changer le mot de passe', desc: 'Mettre à jour votre mot de passe',
+                action: (
+                  <motion.button style={styles.settingBtn} whileHover={{ scale: 1.05 }}
+                    onClick={() => { setPasswordError(''); setPasswordModalOpen(true); }}>
+                    Modifier
+                  </motion.button>
+                )
+              },
+              {
+                label: 'Supprimer le compte', desc: 'Supprimer définitivement votre compte',
+                action: (
+                  <motion.button style={{ ...styles.settingBtn, backgroundColor: '#ff5252' }} whileHover={{ scale: 1.05 }}
+                    onClick={() => { setDeleteError(''); setDeletePassword(''); setDeleteModalOpen(true); }}>
+                    Supprimer
+                  </motion.button>
+                )
+              },
             ]
           },
         ].map((section, i) => (
@@ -615,6 +725,149 @@ const Dashboard = () => {
                     cursor: evalForm.note === 0 ? 'not-allowed' : 'pointer',
                   }}>
                   {evalLoading ? '⏳ Envoi...' : '🚀 Envoyer l\'évaluation'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL édition du profil */}
+      <AnimatePresence>
+        {editProfileOpen && (
+          <motion.div style={styles.modalOverlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !profileLoading && setEditProfileOpen(false)}>
+            <motion.div style={styles.modalBox}
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 20px' }}>
+                ✏️ Modifier le profil
+              </h2>
+              {profileError && (
+                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+                  ❌ {profileError}
+                </div>
+              )}
+              {[
+                { label: 'Email', name: 'email', type: 'email' },
+                { label: 'Téléphone', name: 'telephone', type: 'text' },
+                { label: 'Adresse', name: 'adresse', type: 'text' },
+              ].map(field => (
+                <div key={field.name} style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>{field.label}</label>
+                  <input
+                    type={field.type}
+                    value={profileForm[field.name]}
+                    onChange={e => setProfileForm({ ...profileForm, [field.name]: e.target.value })}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <motion.button onClick={() => setEditProfileOpen(false)} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Annuler
+                </motion.button>
+                <motion.button onClick={enregistrerProfil} disabled={profileLoading}
+                  whileHover={{ scale: 1.03 }}
+                  style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: profileLoading ? 'not-allowed' : 'pointer' }}>
+                  {profileLoading ? '⏳ Enregistrement...' : '💾 Enregistrer'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL changement de mot de passe */}
+      <AnimatePresence>
+        {passwordModalOpen && (
+          <motion.div style={styles.modalOverlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !passwordLoading && setPasswordModalOpen(false)}>
+            <motion.div style={styles.modalBox}
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 20px' }}>
+                🔐 Changer le mot de passe
+              </h2>
+              {passwordError && (
+                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+                  ❌ {passwordError}
+                </div>
+              )}
+              {[
+                { label: 'Ancien mot de passe', name: 'ancien_mot_de_passe' },
+                { label: 'Nouveau mot de passe', name: 'nouveau_mot_de_passe' },
+                { label: 'Confirmer le nouveau mot de passe', name: 'confirmation' },
+              ].map(field => (
+                <div key={field.name} style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>{field.label}</label>
+                  <input
+                    type="password"
+                    value={passwordForm[field.name]}
+                    onChange={e => setPasswordForm({ ...passwordForm, [field.name]: e.target.value })}
+                    style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                  />
+                </div>
+              ))}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                <motion.button onClick={() => setPasswordModalOpen(false)} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Annuler
+                </motion.button>
+                <motion.button onClick={changerMotDePasse} disabled={passwordLoading}
+                  whileHover={{ scale: 1.03 }}
+                  style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: passwordLoading ? 'not-allowed' : 'pointer' }}>
+                  {passwordLoading ? '⏳ Modification...' : '🔐 Confirmer'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL suppression de compte */}
+      <AnimatePresence>
+        {deleteModalOpen && (
+          <motion.div style={styles.modalOverlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !deleteLoading && setDeleteModalOpen(false)}>
+            <motion.div style={styles.modalBox}
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#d32f2f', margin: '0 0 10px' }}>
+                ⚠️ Supprimer le compte
+              </h2>
+              <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
+                Cette action est irréversible. Toutes vos données seront définitivement supprimées.
+              </p>
+              {deleteError && (
+                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+                  ❌ {deleteError}
+                </div>
+              )}
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>
+                  Confirmez votre mot de passe
+                </label>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={e => setDeletePassword(e.target.value)}
+                  style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <motion.button onClick={() => setDeleteModalOpen(false)} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Annuler
+                </motion.button>
+                <motion.button onClick={supprimerCompte} disabled={deleteLoading || !deletePassword}
+                  whileHover={{ scale: 1.03 }}
+                  style={{ flex: 2, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: (deleteLoading || !deletePassword) ? 'not-allowed' : 'pointer' }}>
+                  {deleteLoading ? '⏳ Suppression...' : '🗑️ Supprimer définitivement'}
                 </motion.button>
               </div>
             </motion.div>

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import axios from 'axios';
 import artisanImg from '../assets/artisan.png';
 import { useAuth } from '../context/AuthContext';
 
@@ -19,7 +18,6 @@ const Register = () => {
     adresse: '',
   });
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -166,17 +164,8 @@ const Register = () => {
               ❌ {error}
             </motion.div>
           )}
-          {success && (
-            <motion.div
-              style={styles.successBox}
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-            >
-              ✅ {success}
-            </motion.div>
-          )}
 
-          <div style={styles.form}>
+          <form style={styles.form} onSubmit={handleSubmit}>
             {[
               { label: "Nom d'utilisateur *", name: 'username', type: 'text', placeholder: 'ex: ahmed123' },
               { label: 'Email *', name: 'email', type: 'email', placeholder: 'ex: ahmed@email.com' },
@@ -216,7 +205,7 @@ const Register = () => {
             </motion.div>
 
             <motion.button
-              onClick={handleSubmit}
+              type="submit"
               style={loading ? styles.btnDisabled : styles.btn}
               disabled={loading}
               whileHover={!loading ? { scale: 1.03, backgroundColor: '#009624' } : {}}
@@ -224,7 +213,7 @@ const Register = () => {
             >
               {loading ? '⏳ Création...' : '🚀 Créer mon compte'}
             </motion.button>
-          </div>
+          </form>
 
           <Link to="/" style={styles.backLink}>← Retour à l'accueil</Link>
         </motion.div>
@@ -333,14 +322,6 @@ const styles = {
   errorBox: {
     backgroundColor: '#ffe8e8',
     color: '#d32f2f',
-    padding: '12px 16px',
-    borderRadius: '10px',
-    fontSize: '14px',
-    marginBottom: '20px',
-  },
-  successBox: {
-    backgroundColor: '#e8f5e9',
-    color: '#2e7d32',
     padding: '12px 16px',
     borderRadius: '10px',
     fontSize: '14px',

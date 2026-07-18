@@ -95,10 +95,10 @@ class EvaluationSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
-class Meta:
-    model = Evaluation
-    fields = ['id', 'note', 'commentaire', 'date_creation', 'client', 'client_nom', 'artisan', 'artisan_nom']
-    extra_kwargs = {
-        'client': {'read_only': True},
-        'artisan': {'read_only': True},
-    }
+    class Meta:
+        model = Evaluation
+        fields = ['id', 'note', 'commentaire', 'date_creation', 'client', 'client_nom', 'artisan', 'artisan_nom']
+        extra_kwargs = {
+            'client': {'read_only': True},
+            'artisan': {'read_only': True},
+        }

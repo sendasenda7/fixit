@@ -1,14 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const Navbar = () => {
+  const { user, logout } = useAuth();
+
   return (
     <nav style={styles.nav}>
       {/* Logo */}
-      <div style={styles.logo}>
+      <Link to="/" style={styles.logo}>
         <span style={styles.logoFix}>Fix</span>
         <span style={styles.logoIt}>It</span>
-      </div>
+      </Link>
 
       {/* Liens navigation */}
       <ul style={styles.navLinks}>
@@ -19,8 +22,19 @@ const Navbar = () => {
 
       {/* Boutons */}
       <div style={styles.navButtons}>
-        <Link to="/login" style={styles.btnLogin}>Se connecter</Link>
-        <Link to="/register" style={styles.btnRegister}>S'inscrire</Link>
+        {user ? (
+          <>
+            <Link to="/dashboard" style={styles.btnLogin}>Tableau de bord</Link>
+            <button onClick={logout} style={{ ...styles.btnRegister, border: 'none', cursor: 'pointer' }}>
+              Déconnexion
+            </button>
+          </>
+        ) : (
+          <>
+            <Link to="/login" style={styles.btnLogin}>Se connecter</Link>
+            <Link to="/register" style={styles.btnRegister}>S'inscrire</Link>
+          </>
+        )}
       </div>
     </nav>
   );
@@ -42,6 +56,7 @@ const styles = {
     fontSize: '28px',
     fontWeight: 'bold',
     cursor: 'pointer',
+    textDecoration: 'none',
   },
   logoFix: { color: '#1a73e8' },
   logoIt: { color: '#00c853' },

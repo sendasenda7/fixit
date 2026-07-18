@@ -1,7 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, useAnimation } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
+import { useAuth } from '../context/AuthContext';
+
+// Fait correspondre un texte libre à un type de service connu
+const matchServiceType = (text) => {
+  const normalized = text.trim().toLowerCase();
+  const map = {
+    plombier: 'plomberie', plomberie: 'plomberie',
+    électricien: 'electricite', electricien: 'electricite', électricité: 'electricite', electricite: 'electricite',
+    peintre: 'peinture', peinture: 'peinture',
+    menuisier: 'menuiserie', menuiserie: 'menuiserie',
+    climatisation: 'climatisation', clim: 'climatisation',
+    réparation: 'reparation', reparation: 'reparation',
+  };
+  return map[normalized] || null;
+};
 
 // Hook pour détecter quand un élément est visible
 const useInView = (threshold = 0.2) => {
@@ -36,9 +51,21 @@ const AnimatedSection = ({ children, delay = 0 }) => {
 };
 
 const LandingPage = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchText, setSearchText] = useState('');
   const [counter, setCounter] = useState({ artisans: 0, clients: 0, satisfaction: 0 });
   const [statsRef, statsInView] = useInView();
+
+  const handleSearch = () => {
+    const type_service = matchServiceType(searchText);
+    if (!user) {
+      // Un visiteur doit d'abord créer un compte pour publier une demande
+      navigate('/register');
+      return;
+    }
+    navigate('/nouvelle-demande', { state: { type_service } });
+  };
 
   // Animation des compteurs
   useEffect(() => {
@@ -134,9 +161,11 @@ const LandingPage = () => {
               placeholder={`Rechercher un ${placeholder}...`}
               value={searchText}
               onChange={(e) => setSearchText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               style={styles.searchInput}
             />
             <motion.button
+              onClick={handleSearch}
               style={styles.searchBtn}
               whileHover={{ backgroundColor: '#1557b0', scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -380,16 +409,27 @@ const LandingPage = () => {
             <h4 style={styles.footerColTitle}>Services</h4>
             <ul style={styles.footerList}>
               {['🚿 Plomberie', '⚡ Électricité', '🔨 Réparation', '🎨 Peinture', '❄️ Climatisation'].map((s) => (
-                <motion.li key={s} whileHover={{ x: 5, color: '#fff' }}>{s}</motion.li>
+                <motion.li key={s} whileHover={{ x: 5, color: '#fff' }}>
+                  <a href="#services" style={styles.footerLink}>{s}</a>
+                </motion.li>
               ))}
             </ul>
           </div>
           <div style={styles.footerCol}>
             <h4 style={styles.footerColTitle}>Liens utiles</h4>
             <ul style={styles.footerList}>
-              {['🏠 Accueil', 'ℹ️ Comment ça marche', '🔐 Se connecter', '📝 S\'inscrire'].map((s) => (
-                <motion.li key={s} whileHover={{ x: 5, color: '#fff' }}>{s}</motion.li>
-              ))}
+              <motion.li whileHover={{ x: 5, color: '#fff' }}>
+                <Link to="/" style={styles.footerLink}>🏠 Accueil</Link>
+              </motion.li>
+              <motion.li whileHover={{ x: 5, color: '#fff' }}>
+                <a href="#comment" style={styles.footerLink}>ℹ️ Comment ça marche</a>
+              </motion.li>
+              <motion.li whileHover={{ x: 5, color: '#fff' }}>
+                <Link to="/login" style={styles.footerLink}>🔐 Se connecter</Link>
+              </motion.li>
+              <motion.li whileHover={{ x: 5, color: '#fff' }}>
+                <Link to="/register" style={styles.footerLink}>📝 S'inscrire</Link>
+              </motion.li>
             </ul>
           </div>
           <div style={styles.footerCol}>
@@ -727,6 +767,10 @@ const styles = {
     fontSize: '14px',
     color: '#888',
     cursor: 'pointer',
+  },
+  footerLink: {
+    color: 'inherit',
+    textDecoration: 'none',
   },
   footerBottom: {
     borderTop: '1px solid #333',

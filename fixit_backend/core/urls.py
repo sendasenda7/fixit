@@ -9,6 +9,8 @@ urlpatterns = [
     path('logout/', views.logout_view),
     path('token/refresh/', TokenRefreshView.as_view()),
     path('profile/', views.profile),
+    path('profile/password/', views.change_password),
+    path('profile/delete/', views.delete_account),
 
     # Demandes
     path('demandes/', views.demandes_list),
