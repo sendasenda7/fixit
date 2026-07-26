@@ -6,10 +6,12 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.db import models
 from .models import User, Demande, Offre, Evaluation
 from .serializers import (
     UserSerializer, RegisterSerializer,
-    DemandeSerializer, OffreSerializer, EvaluationSerializer
+    DemandeSerializer, OffreSerializer, EvaluationSerializer,
+    ArtisanPublicSerializer
 )
 
 
@@ -110,6 +112,26 @@ def delete_account(request):
 
     request.user.delete()
     return Response({'message': 'Compte supprimé avec succès'}, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def artisans_list(request):
+    """Liste publique des artisans, avec recherche (nom/adresse) et filtre par spécialité"""
+    artisans = User.objects.filter(role='artisan')
+
+    specialite = request.query_params.get('specialite')
+    if specialite:
+        artisans = artisans.filter(specialite=specialite)
+
+    q = request.query_params.get('q')
+    if q:
+        artisans = artisans.filter(
+            models.Q(username__icontains=q) | models.Q(adresse__icontains=q)
+        )
+
+    serializer = ArtisanPublicSerializer(artisans, many=True, context={'request': request})
+    return Response(serializer.data)
 
 
 # ================================

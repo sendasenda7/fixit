@@ -121,6 +121,10 @@ const Dashboard = () => {
   const [notifOffres, setNotifOffres] = useState(true);
   const [notifMessages, setNotifMessages] = useState(false);
 
+  // Bascule mode artisan
+  const [artisanModeLoading, setArtisanModeLoading] = useState(false);
+  const [artisanModeError, setArtisanModeError] = useState('');
+
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchDemandes();
@@ -155,6 +159,39 @@ const Dashboard = () => {
   };
 
   const handleLogout = () => logout();
+
+  const [confirmArtisanModalOpen, setConfirmArtisanModalOpen] = useState(false);
+  const [deleteDemandeModal, setDeleteDemandeModal] = useState(null);
+  const [deleteDemandeLoading, setDeleteDemandeLoading] = useState(false);
+
+  const confirmerSuppressionDemande = async () => {
+    setDeleteDemandeLoading(true);
+    try {
+      await api.delete(`/demandes/${deleteDemandeModal.id}/`);
+      setDeleteDemandeModal(null);
+      fetchDemandes();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDeleteDemandeLoading(false);
+    }
+  };
+
+  const executerBasculeModeArtisan = async () => {
+    setConfirmArtisanModalOpen(false);
+    const newRole = user.role === 'artisan' ? 'client' : 'artisan';
+    setArtisanModeError('');
+    setArtisanModeLoading(true);
+    try {
+      const res = await api.put('/profile/', { role: newRole });
+      updateUser(res.data);
+      navigate('/dashboard'); // App.js redirige automatiquement vers le bon Dashboard selon le rôle
+    } catch (err) {
+      setArtisanModeError('Impossible de changer de mode. Réessayez !');
+    } finally {
+      setArtisanModeLoading(false);
+    }
+  };
 
   const ouvrirEditionProfil = () => {
     setProfileForm({
@@ -455,12 +492,7 @@ const Dashboard = () => {
                     {d.statut === 'ouverte' ? '🟢 Ouverte' : d.statut === 'en_cours' ? '🔄 En cours' : '✅ Terminée'}
                   </span>
                   <motion.button style={styles.deleteBtn} whileHover={{ scale: 1.1 }}
-                    onClick={async () => {
-                      if (window.confirm('Supprimer cette demande ?')) {
-                        await api.delete(`/demandes/${d.id}/`);
-                        fetchDemandes();
-                      }
-                    }}>🗑️</motion.button>
+                    onClick={() => setDeleteDemandeModal(d)}>🗑️</motion.button>
                 </div>
               </motion.div>
             );
@@ -537,26 +569,20 @@ const Dashboard = () => {
 
           <motion.div style={{ ...styles.profileCard, backgroundColor: theme.card, border: '2px solid #1a73e8' }} whileHover={{ y: -3 }}>
             <h3 style={{ ...styles.profileCardTitle, color: theme.text }}>🔧 Mode Artisan</h3>
-            <p style={{ color: theme.subtext, fontSize: '14px', marginBottom: '15px' }}>
+            <p style={{ color: theme.subtext, fontSize: '14px', marginBottom: '10px' }}>
               {user.role === 'artisan'
                 ? 'Vous êtes actuellement en mode Artisan.'
-                : 'Activez le mode Artisan pour proposer vos services.'}
+                : 'Activez le mode Artisan pour proposer vos services et recevoir des demandes.'}
             </p>
+            {artisanModeError && (
+              <p style={{ color: '#d32f2f', fontSize: '13px', marginBottom: '10px' }}>❌ {artisanModeError}</p>
+            )}
             <motion.button
-              style={{ ...styles.artisanBtn, backgroundColor: user.role === 'artisan' ? '#ff5252' : '#1a73e8' }}
-              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-              onClick={async () => {
-                const newRole = user.role === 'artisan' ? 'client' : 'artisan';
-                try {
-                  await api.put('/profile/', { role: newRole });
-                  const updatedUser = { ...user, role: newRole };
-                  localStorage.setItem('user', JSON.stringify(updatedUser));
-                  window.location.reload();
-                } catch (err) {
-                  console.error('Erreur changement de rôle', err);
-                }
-              }}>
-              {user.role === 'artisan' ? '🔴 Désactiver mode Artisan' : '🔧 Activer mode Artisan'}
+              style={{ ...styles.artisanBtn, backgroundColor: user.role === 'artisan' ? '#ff5252' : '#1a73e8', opacity: artisanModeLoading ? 0.6 : 1 }}
+              whileHover={!artisanModeLoading ? { scale: 1.03 } : {}} whileTap={!artisanModeLoading ? { scale: 0.97 } : {}}
+              disabled={artisanModeLoading}
+              onClick={() => setConfirmArtisanModalOpen(true)}>
+              {artisanModeLoading ? '⏳ Mise à jour...' : user.role === 'artisan' ? '🔴 Désactiver mode Artisan' : '🔧 Activer mode Artisan'}
             </motion.button>
           </motion.div>
         </div>
@@ -868,6 +894,70 @@ const Dashboard = () => {
                   whileHover={{ scale: 1.03 }}
                   style={{ flex: 2, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: (deleteLoading || !deletePassword) ? 'not-allowed' : 'pointer' }}>
                   {deleteLoading ? '⏳ Suppression...' : '🗑️ Supprimer définitivement'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL confirmation changement de mode */}
+      <AnimatePresence>
+        {confirmArtisanModalOpen && (
+          <motion.div style={styles.modalOverlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !artisanModeLoading && setConfirmArtisanModalOpen(false)}>
+            <motion.div style={{ maxWidth: '400px', width: '90%', backgroundColor: '#fff', borderRadius: '20px', padding: '30px', textAlign: 'center' }}
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '44px', marginBottom: '10px' }}>{user.role === 'artisan' ? '👤' : '🔧'}</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
+                {user.role === 'artisan' ? 'Repasser en mode Client ?' : 'Activer le mode Artisan ?'}
+              </h2>
+              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+                {user.role === 'artisan'
+                  ? 'Vos offres existantes resteront visibles mais vous ne pourrez plus en soumettre de nouvelles.'
+                  : 'Vous pourrez répondre aux demandes des clients et proposer vos services.'}
+              </p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <motion.button onClick={() => setConfirmArtisanModalOpen(false)} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Annuler
+                </motion.button>
+                <motion.button onClick={executerBasculeModeArtisan} disabled={artisanModeLoading} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: artisanModeLoading ? 'not-allowed' : 'pointer' }}>
+                  {artisanModeLoading ? '⏳...' : 'Confirmer'}
+                </motion.button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL confirmation suppression de demande */}
+      <AnimatePresence>
+        {deleteDemandeModal && (
+          <motion.div style={styles.modalOverlay}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            onClick={() => !deleteDemandeLoading && setDeleteDemandeModal(null)}>
+            <motion.div style={{ maxWidth: '400px', width: '90%', backgroundColor: '#fff', borderRadius: '20px', padding: '30px', textAlign: 'center' }}
+              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
+              <div style={{ fontSize: '44px', marginBottom: '10px' }}>🗑️</div>
+              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
+                Supprimer cette demande ?
+              </h2>
+              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+                « {deleteDemandeModal.titre} » sera définitivement supprimée. Cette action est irréversible.
+              </p>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <motion.button onClick={() => setDeleteDemandeModal(null)} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+                  Annuler
+                </motion.button>
+                <motion.button onClick={confirmerSuppressionDemande} disabled={deleteDemandeLoading} whileHover={{ scale: 1.03 }}
+                  style={{ flex: 1, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: deleteDemandeLoading ? 'not-allowed' : 'pointer' }}>
+                  {deleteDemandeLoading ? '⏳...' : '🗑️ Supprimer'}
                 </motion.button>
               </div>
             </motion.div>

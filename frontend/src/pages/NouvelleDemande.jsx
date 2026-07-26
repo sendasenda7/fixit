@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 
@@ -201,13 +201,15 @@ const Step3 = ({ formData, setFormData, errors }) => (
 // ========== COMPOSANT PRINCIPAL ==========
 const NouvelleDemande = () => {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const location = useLocation();
+  const serviceInitial = location.state?.type_service || '';
+  const [step, setStep] = useState(serviceInitial ? 2 : 1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [formData, setFormData] = useState({
     titre: '',
     description: '',
-    type_service: '',
+    type_service: serviceInitial,
     localisation: '',
     budget: '',
   });
@@ -236,14 +238,13 @@ const handleSubmit = async () => {
   if (!validateStep()) return;
   setLoading(true);
   try {
-    console.log('Données envoyées:', formData); // ← ajoute ça
-    const res = await api.post('/demandes/', formData);
-    console.log('Réponse:', res.data); // ← et ça
+    await api.post('/demandes/', formData);
     setSuccess(true);
     setTimeout(() => navigate('/dashboard'), 2500);
   } catch (err) {
-    console.log('Erreur détaillée:', err.response?.data); // ← et ça
-    setErrors({ submit: 'Erreur lors de la publication. Réessayez !' });
+    const data = err.response?.data;
+    const message = data ? Object.values(data)[0] : 'Erreur lors de la publication. Réessayez !';
+    setErrors({ submit: Array.isArray(message) ? message[0] : message });
   } finally {
     setLoading(false);
   }

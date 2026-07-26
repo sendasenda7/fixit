@@ -17,6 +17,7 @@ const Navbar = () => {
       <ul style={styles.navLinks}>
         <li><a href="#comment" style={styles.link}>Comment ça marche</a></li>
         <li><a href="#services" style={styles.link}>Services</a></li>
+        <li><Link to="/artisans" style={styles.link}>Trouver un artisan</Link></li>
         <li><a href="#avantages" style={styles.link}>Avantages</a></li>
       </ul>
 

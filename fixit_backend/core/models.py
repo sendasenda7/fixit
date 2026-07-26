@@ -9,6 +9,15 @@ class User(AbstractUser):
         ('client', 'Client'),
         ('artisan', 'Artisan'),
     ]
+    SPECIALITE_CHOICES = [
+        ('plomberie', 'Plomberie'),
+        ('electricite', 'Électricité'),
+        ('reparation', 'Réparation'),
+        ('peinture', 'Peinture'),
+        ('climatisation', 'Climatisation'),
+        ('menuiserie', 'Menuiserie'),
+        ('autre', 'Autre'),
+    ]
     role = models.CharField(
         max_length=10,
         choices=ROLE_CHOICES,
@@ -16,6 +25,12 @@ class User(AbstractUser):
     )
     telephone = models.CharField(max_length=20, blank=True)
     adresse = models.CharField(max_length=255, blank=True)
+    specialite = models.CharField(
+        max_length=50,
+        choices=SPECIALITE_CHOICES,
+        blank=True,
+        help_text="Métier de l'artisan (non utilisé pour les clients)"
+    )
     photo = models.ImageField(
         upload_to='photos/',
         blank=True,

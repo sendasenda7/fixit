@@ -7,6 +7,8 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DashboardArtisan from './pages/DashboardArtisan';
 import NouvelleDemande from './pages/NouvelleDemande';
+import ArtisansListe from './pages/ArtisansListe';
+import NotFound from './pages/NotFound';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -26,6 +28,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/artisans" element={<ArtisansListe />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={
@@ -34,6 +37,7 @@ function App() {
         <Route path="/nouvelle-demande" element={
           <PrivateRoute><NouvelleDemande /></PrivateRoute>
         } />
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Router>
   );

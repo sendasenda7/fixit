@@ -12,6 +12,9 @@ urlpatterns = [
     path('profile/password/', views.change_password),
     path('profile/delete/', views.delete_account),
 
+    # Artisans (public)
+    path('artisans/', views.artisans_list),
+
     # Demandes
     path('demandes/', views.demandes_list),
     path('demandes/<int:pk>/', views.demande_detail),

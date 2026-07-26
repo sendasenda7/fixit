@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
-import { useAuth } from '../context/AuthContext';
 
 // Fait correspondre un texte libre à un type de service connu
 const matchServiceType = (text) => {
@@ -52,19 +51,13 @@ const AnimatedSection = ({ children, delay = 0 }) => {
 
 const LandingPage = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchText, setSearchText] = useState('');
   const [counter, setCounter] = useState({ artisans: 0, clients: 0, satisfaction: 0 });
   const [statsRef, statsInView] = useInView();
 
   const handleSearch = () => {
     const type_service = matchServiceType(searchText);
-    if (!user) {
-      // Un visiteur doit d'abord créer un compte pour publier une demande
-      navigate('/register');
-      return;
-    }
-    navigate('/nouvelle-demande', { state: { type_service } });
+    navigate('/artisans', { state: { type_service } });
   };
 
   // Animation des compteurs

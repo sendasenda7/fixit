@@ -15,8 +15,30 @@ class UserSerializer(serializers.ModelSerializer):
             'role',
             'telephone',
             'adresse',
+            'specialite',
             'photo'
         ]
+
+
+# ================================
+# SERIALIZER PUBLIC ARTISAN (liste/recherche)
+# ================================
+class ArtisanPublicSerializer(serializers.ModelSerializer):
+    note_moyenne = serializers.SerializerMethodField()
+    nb_avis = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'specialite', 'adresse', 'photo', 'note_moyenne', 'nb_avis']
+
+    def get_note_moyenne(self, obj):
+        evals = obj.evaluations_recues.all()
+        if not evals:
+            return 0
+        return round(sum(e.note for e in evals) / len(evals), 1)
+
+    def get_nb_avis(self, obj):
+        return obj.evaluations_recues.count()
 
 
 # ================================
@@ -71,12 +93,15 @@ class DemandeSerializer(serializers.ModelSerializer):
 # ================================
 class OffreSerializer(serializers.ModelSerializer):
     artisan_nom = serializers.CharField(source='artisan.username', read_only=True)
+    demande_titre = serializers.CharField(source='demande.titre', read_only=True)
+    demande_statut = serializers.CharField(source='demande.statut', read_only=True)
 
     class Meta:
         model = Offre
         fields = [
             'id', 'prix_propose', 'message', 'date_creation',
-            'est_acceptee', 'artisan', 'artisan_nom', 'demande'
+            'est_acceptee', 'artisan', 'artisan_nom', 'demande',
+            'demande_titre', 'demande_statut'
         ]
         extra_kwargs = {
             'artisan': {'read_only': True}  # ← ajoute ça
