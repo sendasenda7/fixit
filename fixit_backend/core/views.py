@@ -18,6 +18,7 @@ from .serializers import (
     DemandeSerializer, OffreSerializer, EvaluationSerializer,
     ArtisanPublicSerializer, ConversationSerializer, MessageSerializer
 )
+from .pagination import StandardResultsSetPagination
 
 
 # ================================
@@ -206,8 +207,12 @@ def artisans_list(request):
             models.Q(username__icontains=q) | models.Q(adresse__icontains=q)
         )
 
-    serializer = ArtisanPublicSerializer(artisans, many=True, context={'request': request})
-    return Response(serializer.data)
+    artisans = artisans.order_by('id')
+
+    paginator = StandardResultsSetPagination()
+    page = paginator.paginate_queryset(artisans, request)
+    serializer = ArtisanPublicSerializer(page, many=True, context={'request': request})
+    return paginator.get_paginated_response(serializer.data)
 
 
 # ================================
@@ -225,7 +230,11 @@ def demandes_list(request):
             qs = qs.filter(type_service=type_service)
         if statut:
             qs = qs.filter(statut=statut)
-        return Response(DemandeSerializer(qs, many=True).data)
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(qs, request)
+        serializer = DemandeSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     # POST : nécessite d'être connecté ET d'être un client
     if not request.user.is_authenticated:
@@ -281,7 +290,17 @@ def mes_demandes(request):
 def offres_list(request):
     if request.method == 'GET':
         offres = Offre.objects.all().order_by('-date_creation')
-        return Response(OffreSerializer(offres, many=True).data)
+
+        # Filtre optionnel : ?artisan=<id> pour ne récupérer que les offres
+        # d'un artisan donné (ex : "Mes offres" côté DashboardArtisan)
+        artisan_id = request.query_params.get('artisan')
+        if artisan_id:
+            offres = offres.filter(artisan_id=artisan_id)
+
+        paginator = StandardResultsSetPagination()
+        page = paginator.paginate_queryset(offres, request)
+        serializer = OffreSerializer(page, many=True)
+        return paginator.get_paginated_response(serializer.data)
 
     # Seul un artisan peut faire une offre
     if request.user.role != 'artisan':

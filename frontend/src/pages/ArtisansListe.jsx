@@ -25,20 +25,29 @@ const ArtisansListe = () => {
   const [loading, setLoading] = useState(true);
   const [specialite, setSpecialite] = useState(location.state?.type_service || '');
   const [q, setQ] = useState('');
+  const [page, setPage] = useState(1);
+  const [count, setCount] = useState(0);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const PAGE_SIZE = 12;
 
   useEffect(() => {
-    fetchArtisans();
+    fetchArtisans(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [specialite]);
+  }, [specialite, page]);
 
-  const fetchArtisans = async () => {
+  const fetchArtisans = async (pageToLoad = 1) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (specialite) params.append('specialite', specialite);
       if (q) params.append('q', q);
+      params.append('page', pageToLoad);
       const res = await api.get(`/artisans/?${params.toString()}`);
-      setArtisans(res.data);
+      setArtisans(res.data.results ?? res.data);
+      setCount(res.data.count ?? (res.data.results ?? res.data).length);
+      setHasNext(Boolean(res.data.next));
+      setHasPrevious(Boolean(res.data.previous));
     } catch (err) {
       console.error(err);
     } finally {
@@ -48,8 +57,11 @@ const ArtisansListe = () => {
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    fetchArtisans();
+    setPage(1);
+    fetchArtisans(1);
   };
+
+  const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
 
   const contacterArtisan = () => {
     // Contacter un artisan passe par la publication d'une demande (pas de messagerie directe pour l'instant)
@@ -59,10 +71,12 @@ const ArtisansListe = () => {
 
   return (
     <div style={styles.page}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
       <Navbar />
 
       <div style={styles.hero}>
-        <h1 style={styles.heroTitle}>🔍 Trouver un artisan</h1>
+        <p style={styles.eyebrow}>FIXIT · ANNUAIRE</p>
+        <h1 style={styles.heroTitle}>Trouver un artisan</h1>
         <p style={styles.heroDesc}>Parcourez nos artisans qualifiés et consultez leurs avis</p>
 
         <form onSubmit={handleSearchSubmit} style={styles.searchBar}>
@@ -82,7 +96,7 @@ const ArtisansListe = () => {
           {specialites.map(s => (
             <motion.button
               key={s.id}
-              onClick={() => setSpecialite(s.id)}
+              onClick={() => { setSpecialite(s.id); setPage(1); }}
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               style={{
@@ -99,7 +113,7 @@ const ArtisansListe = () => {
 
       <div style={styles.grid}>
         {loading ? (
-          <p style={{ textAlign: 'center', color: '#888', gridColumn: '1 / -1' }}>⏳ Chargement...</p>
+          <p style={{ textAlign: 'center', color: '#888', gridColumn: '1 / -1' }}>Chargement…</p>
         ) : artisans.length === 0 ? (
           <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '60px 0' }}>
             <p style={{ fontSize: '40px', margin: 0 }}>🔍</p>
@@ -115,15 +129,16 @@ const ArtisansListe = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
-                whileHover={{ y: -4, boxShadow: '0 12px 30px rgba(0,0,0,0.1)' }}
+                whileHover={{ y: -4, boxShadow: '0 14px 32px rgba(20,30,60,0.12)' }}
               >
                 <div style={styles.cardAvatar}>{a.username.charAt(0).toUpperCase()}</div>
                 <h3 style={styles.cardName}>{a.username}</h3>
                 <p style={styles.cardSpecialite}>{spec ? `${spec.icon} ${spec.label}` : '🔧 Métier non précisé'}</p>
                 {a.adresse && <p style={styles.cardAdresse}>📍 {a.adresse}</p>}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '12px 0' }}>
+                <div style={styles.cardPerforation} />
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '14px 0' }}>
                   <StarRating value={Math.round(a.note_moyenne)} readOnly />
-                  <span style={{ fontSize: '13px', color: '#888' }}>
+                  <span style={{ fontSize: '13px', color: '#8a90a3' }}>
                     {a.nb_avis > 0 ? `${a.note_moyenne} (${a.nb_avis} avis)` : 'Pas encore d\'avis'}
                   </span>
                 </div>
@@ -132,29 +147,59 @@ const ArtisansListe = () => {
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   style={styles.contactBtn}
                 >
-                  📩 Publier une demande
+                  Publier une demande
                 </motion.button>
               </motion.div>
             );
           })
         )}
       </div>
+
+      {!loading && artisans.length > 0 && totalPages > 1 && (
+        <div style={styles.pagination}>
+          <motion.button
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={!hasPrevious}
+            whileHover={hasPrevious ? { scale: 1.03 } : {}}
+            whileTap={hasPrevious ? { scale: 0.97 } : {}}
+            style={{ ...styles.pageBtn, opacity: hasPrevious ? 1 : 0.4, cursor: hasPrevious ? 'pointer' : 'default' }}
+          >
+            ← Précédent
+          </motion.button>
+          <span style={styles.pageInfo}>Page {page} / {totalPages}</span>
+          <motion.button
+            onClick={() => setPage(p => p + 1)}
+            disabled={!hasNext}
+            whileHover={hasNext ? { scale: 1.03 } : {}}
+            whileTap={hasNext ? { scale: 0.97 } : {}}
+            style={{ ...styles.pageBtn, opacity: hasNext ? 1 : 0.4, cursor: hasNext ? 'pointer' : 'default' }}
+          >
+            Suivant →
+          </motion.button>
+        </div>
+      )}
     </div>
   );
 };
 
+const FONT_DISPLAY = "'Space Grotesk', 'Segoe UI', sans-serif";
+
 const styles = {
-  page: { minHeight: '100vh', backgroundColor: '#f8faff' },
+  page: { minHeight: '100vh', backgroundColor: '#f4f6fb' },
   hero: {
-    padding: '50px 20px 30px', textAlign: 'center',
+    padding: '54px 20px 34px', textAlign: 'center',
     background: 'linear-gradient(135deg, #1a73e8 0%, #00c853 100%)',
   },
-  heroTitle: { color: '#fff', fontSize: '32px', fontWeight: '800', margin: '0 0 10px' },
+  eyebrow: {
+    margin: '0 0 6px', fontFamily: FONT_DISPLAY, fontSize: '11px', fontWeight: 600,
+    letterSpacing: '1.6px', color: 'rgba(255,255,255,0.8)',
+  },
+  heroTitle: { color: '#fff', fontFamily: FONT_DISPLAY, fontSize: '32px', fontWeight: '700', margin: '0 0 10px' },
   heroDesc: { color: 'rgba(255,255,255,0.9)', fontSize: '15px', margin: '0 0 30px' },
   searchBar: {
     display: 'flex', maxWidth: '500px', margin: '0 auto 20px',
     backgroundColor: '#fff', borderRadius: '14px', overflow: 'hidden',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+    boxShadow: '0 8px 24px rgba(20,30,60,0.18)',
   },
   searchInput: { flex: 1, border: 'none', padding: '16px 20px', fontSize: '14px', outline: 'none' },
   searchBtn: {
@@ -167,26 +212,39 @@ const styles = {
     fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
   grid: {
-    maxWidth: '1100px', margin: '0 auto', padding: '40px 20px',
+    maxWidth: '1100px', margin: '0 auto', padding: '44px 20px',
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '24px',
   },
   card: {
-    backgroundColor: '#fff', borderRadius: '18px', padding: '24px',
-    textAlign: 'center', boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
+    backgroundColor: '#fff', borderRadius: '18px', padding: '26px 24px',
+    textAlign: 'center', boxShadow: '0 4px 24px rgba(20,30,60,0.08)',
   },
   cardAvatar: {
-    width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 12px',
+    width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 14px',
     background: 'linear-gradient(135deg, #1a73e8, #00c853)', color: '#fff',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '26px', fontWeight: '800',
+    fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY,
   },
-  cardName: { fontSize: '17px', fontWeight: '800', margin: '0 0 4px', color: '#1a1a2e' },
+  cardName: { fontFamily: FONT_DISPLAY, fontSize: '17px', fontWeight: '700', margin: '0 0 4px', color: '#1a1a2e' },
   cardSpecialite: { fontSize: '13px', color: '#1a73e8', fontWeight: '600', margin: '0 0 4px' },
-  cardAdresse: { fontSize: '13px', color: '#888', margin: 0 },
+  cardAdresse: { fontSize: '13px', color: '#8a90a3', margin: 0 },
+  cardPerforation: {
+    height: '1px', margin: '16px 0 0',
+    backgroundImage: 'repeating-linear-gradient(to right, #e2e5ee 0, #e2e5ee 4px, transparent 4px, transparent 9px)',
+  },
   contactBtn: {
     width: '100%', border: 'none', backgroundColor: '#1a73e8', color: '#fff',
     padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
   },
+  pagination: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px',
+    padding: '0 20px 54px',
+  },
+  pageBtn: {
+    border: 'none', backgroundColor: '#1a1a2e', color: '#fff',
+    padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
+  },
+  pageInfo: { fontFamily: FONT_DISPLAY, fontSize: '13px', color: '#666', fontWeight: '600' },
 };
 
 export default ArtisansListe;

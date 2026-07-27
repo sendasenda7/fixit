@@ -1015,18 +1015,19 @@ const Dashboard = () => {
       </AnimatePresence>
 
       <div style={{ ...styles.container, backgroundColor: theme.bg }}>
+        <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
         {/* SIDEBAR */}
         <motion.div style={{ ...styles.sidebar, backgroundColor: theme.sidebar }}
           initial={{ x: -80, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
           <div style={styles.sidebarLogo}>
-            <span style={{ color: '#fff', fontSize: '26px', fontWeight: '800' }}>Fix</span>
-            <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '800' }}>It</span>
+            <span style={{ color: '#fff', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>Fix</span>
+            <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>It</span>
           </div>
           <div style={styles.sidebarUser}>
             <div style={styles.userAvatar}>{user.username?.charAt(0).toUpperCase()}</div>
             <div>
               <p style={styles.userName}>{user.username}</p>
-              <p style={styles.userRole}>{user.role === 'artisan' ? '🔧 Artisan' : '👤 Client'}</p>
+              <p style={styles.userRole}>{user.role === 'artisan' ? 'ARTISAN' : 'CLIENT'}</p>
             </div>
           </div>
           <nav style={styles.sidebarNav}>
@@ -1050,12 +1051,13 @@ const Dashboard = () => {
         <div style={{ ...styles.main, backgroundColor: theme.bg }}>
           <motion.div style={styles.header} initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
             <div>
+              <p style={{ ...styles.eyebrow, color: darkMode ? '#6b7590' : '#9aa3b8' }}>ESPACE CLIENT</p>
               <h1 style={{ ...styles.headerTitle, color: theme.text }}>
-                {activeMenu === 'dashboard' && `👋 Bonjour, ${user.username} !`}
-                {activeMenu === 'demandes' && '📋 Mes Demandes'}
-                {activeMenu === 'offres' && '💼 Mes Offres'}
-                {activeMenu === 'profil' && '👤 Mon Profil'}
-                {activeMenu === 'parametres' && '⚙️ Paramètres'}
+                {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
+                {activeMenu === 'demandes' && 'Mes demandes'}
+                {activeMenu === 'offres' && 'Mes offres'}
+                {activeMenu === 'profil' && 'Mon profil'}
+                {activeMenu === 'parametres' && 'Paramètres'}
               </h1>
               <p style={{ ...styles.headerSubtitle, color: theme.subtext }}>
                 {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
@@ -1078,6 +1080,8 @@ const Dashboard = () => {
   );
 };
 
+const FONT_DISPLAY = "'Space Grotesk', 'Segoe UI', sans-serif";
+
 const styles = {
   container: { display: 'flex', minHeight: '100vh' },
   sidebar: {
@@ -1096,7 +1100,7 @@ const styles = {
     color: '#fff', fontSize: '18px', fontWeight: '800',
   },
   userName: { color: '#fff', fontSize: '14px', fontWeight: '700', margin: 0 },
-  userRole: { color: '#aaa', fontSize: '12px', margin: 0 },
+  userRole: { color: '#aaa', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', margin: 0 },
   sidebarNav: { display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 },
   menuItem: {
     display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px',
@@ -1111,24 +1115,28 @@ const styles = {
   },
   main: { marginLeft: '260px', flex: 1, padding: '40px' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px' },
-  headerTitle: { fontSize: '28px', fontWeight: '800', margin: 0 },
+  eyebrow: {
+    margin: '0 0 4px', fontFamily: FONT_DISPLAY, fontSize: '11px', fontWeight: 600,
+    letterSpacing: '1.4px',
+  },
+  headerTitle: { fontFamily: FONT_DISPLAY, fontSize: '26px', fontWeight: '700', margin: 0 },
   headerSubtitle: { fontSize: '14px', margin: '5px 0 0' },
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '25px' },
-  statCard: { borderRadius: '16px', padding: '25px 20px', display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' },
+  statCard: { borderRadius: '18px', padding: '25px 20px', display: 'flex', alignItems: 'center', gap: '15px', cursor: 'pointer' },
   statIcon: { fontSize: '35px' },
-  statValue: { fontSize: '32px', fontWeight: '800', margin: 0 },
+  statValue: { fontFamily: FONT_DISPLAY, fontSize: '30px', fontWeight: '700', margin: 0 },
   statLabel: { fontSize: '13px', color: '#888', margin: 0 },
   chartsRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' },
-  chartCard: { borderRadius: '16px', padding: '25px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' },
-  chartCardFull: { borderRadius: '16px', padding: '25px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', marginBottom: '20px' },
-  chartTitle: { fontSize: '16px', fontWeight: '700', margin: '0 0 15px' },
-  tableCard: { borderRadius: '16px', padding: '25px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' },
+  chartCard: { borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
+  chartCardFull: { borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)', marginBottom: '20px' },
+  chartTitle: { fontFamily: FONT_DISPLAY, fontSize: '15px', fontWeight: '700', margin: '0 0 15px' },
+  tableCard: { borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
   tableHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
   newBtn: { padding: '8px 18px', backgroundColor: '#00c853', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
   demandeRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 10px', borderBottom: '1px solid #f0f0f0', cursor: 'pointer', borderRadius: '8px' },
   demandeRowLeft: { display: 'flex', alignItems: 'center', gap: '12px' },
   demandeRowIcon: { fontSize: '24px', width: '44px', height: '44px', backgroundColor: '#f8faff', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  demandeRowTitle: { fontSize: '14px', fontWeight: '700', margin: '0 0 3px' },
+  demandeRowTitle: { fontFamily: FONT_DISPLAY, fontSize: '14px', fontWeight: '700', margin: '0 0 3px' },
   demandeRowSub: { fontSize: '12px', color: '#888', margin: 0 },
   statutBadge: { padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
   emptyBox: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px', textAlign: 'center', gap: '10px' },
@@ -1141,8 +1149,8 @@ const styles = {
   profileAvatarBig: { width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '36px', fontWeight: '800', border: '3px solid rgba(255,255,255,0.5)' },
   profileInfo: {},
   profileGrid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' },
-  profileCard: { borderRadius: '16px', padding: '25px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' },
-  profileCardTitle: { fontSize: '16px', fontWeight: '800', marginBottom: '20px' },
+  profileCard: { borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
+  profileCardTitle: { fontFamily: FONT_DISPLAY, fontSize: '16px', fontWeight: '700', marginBottom: '20px' },
   profileRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid #f0f0f0' },
   profileRowIcon: { fontSize: '20px', width: '30px' },
   profileRowLabel: { fontSize: '11px', color: '#888', margin: '0 0 2px' },
@@ -1153,8 +1161,8 @@ const styles = {
   statRowValue: { fontSize: '18px', fontWeight: '800' },
   artisanBtn: { width: '100%', padding: '12px', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' },
   settingsGrid: { display: 'flex', flexDirection: 'column', gap: '20px' },
-  settingCard: { borderRadius: '16px', padding: '25px', boxShadow: '0 4px 20px rgba(0,0,0,0.05)' },
-  settingTitle: { fontSize: '16px', fontWeight: '800', marginBottom: '20px' },
+  settingCard: { borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
+  settingTitle: { fontFamily: FONT_DISPLAY, fontSize: '16px', fontWeight: '700', marginBottom: '20px' },
   settingRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 0', borderBottom: '1px solid #f0f0f0' },
   settingLabel: { fontSize: '14px', fontWeight: '600', margin: '0 0 3px' },
   settingDesc: { fontSize: '12px', color: '#888', margin: 0 },

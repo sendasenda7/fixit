@@ -67,11 +67,18 @@ const DashboardArtisan = () => {
     }
   };
 
-  const fetchDemandes = async () => {
+  const [demandesPage, setDemandesPage] = useState(1);
+  const [demandesHasNext, setDemandesHasNext] = useState(false);
+  const [demandesHasPrevious, setDemandesHasPrevious] = useState(false);
+
+  const fetchDemandes = async (pageToLoad = 1) => {
     try {
-      const params = filtreService ? `?type_service=${filtreService}&statut=ouverte` : '?statut=ouverte';
-      const res = await api.get(`/demandes/${params}`);
-      setDemandes(res.data);
+      const params = new URLSearchParams({ statut: 'ouverte', page: pageToLoad });
+      if (filtreService) params.append('type_service', filtreService);
+      const res = await api.get(`/demandes/?${params.toString()}`);
+      setDemandes(res.data.results ?? res.data);
+      setDemandesHasNext(Boolean(res.data.next));
+      setDemandesHasPrevious(Boolean(res.data.previous));
     } catch (err) {
       console.error(err);
     } finally {
@@ -81,16 +88,25 @@ const DashboardArtisan = () => {
 
   const fetchMesOffres = async () => {
     try {
-      const res = await api.get('/offres/');
-      setMesOffres(res.data.filter(o => o.artisan === user.id));
+      // Vue "Mes offres" scopée à cet artisan : on demande une page assez
+      // large pour tout récupérer d'un coup (pas besoin de pagination visible
+      // sur une liste déjà filtrée par utilisateur).
+      const res = await api.get(`/offres/?artisan=${user.id}&page_size=50`);
+      setMesOffres(res.data.results ?? res.data);
     } catch (err) {
       console.error(err);
     }
   };
 
   useEffect(() => {
-    fetchDemandes();
+    setDemandesPage(1);
+    fetchDemandes(1);
   }, [filtreService]);
+
+  useEffect(() => {
+    fetchDemandes(demandesPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [demandesPage]);
 
   const soumettreOffre = async () => {
     if (!offreForm.prix_propose || !offreForm.message) return;
@@ -204,6 +220,30 @@ const DashboardArtisan = () => {
               </motion.div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && demandes.length > 0 && (demandesHasNext || demandesHasPrevious) && (
+        <div style={styles.pagination}>
+          <motion.button
+            onClick={() => setDemandesPage(p => Math.max(1, p - 1))}
+            disabled={!demandesHasPrevious}
+            whileHover={demandesHasPrevious ? { scale: 1.03 } : {}}
+            whileTap={demandesHasPrevious ? { scale: 0.97 } : {}}
+            style={{ ...styles.pageBtn, opacity: demandesHasPrevious ? 1 : 0.4, cursor: demandesHasPrevious ? 'pointer' : 'default' }}
+          >
+            ← Précédent
+          </motion.button>
+          <span style={styles.pageInfo}>Page {demandesPage}</span>
+          <motion.button
+            onClick={() => setDemandesPage(p => p + 1)}
+            disabled={!demandesHasNext}
+            whileHover={demandesHasNext ? { scale: 1.03 } : {}}
+            whileTap={demandesHasNext ? { scale: 0.97 } : {}}
+            style={{ ...styles.pageBtn, opacity: demandesHasNext ? 1 : 0.4, cursor: demandesHasNext ? 'pointer' : 'default' }}
+          >
+            Suivant →
+          </motion.button>
         </div>
       )}
     </div>
@@ -407,6 +447,7 @@ const DashboardArtisan = () => {
 
   return (
     <div style={styles.container}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
       {/* MODAL OFFRE */}
       <AnimatePresence>
         {offreModal && (
@@ -553,14 +594,14 @@ const DashboardArtisan = () => {
       <motion.div style={styles.sidebar}
         initial={{ x: -80, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
         <div style={{ display: 'flex', marginBottom: '30px', paddingLeft: '10px' }}>
-          <span style={{ color: '#fff', fontSize: '26px', fontWeight: '800' }}>Fix</span>
-          <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '800' }}>It</span>
+          <span style={{ color: '#fff', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>Fix</span>
+          <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>It</span>
         </div>
         <div style={styles.sidebarUser}>
           <div style={styles.userAvatar}>{user.username?.charAt(0).toUpperCase()}</div>
           <div>
             <p style={styles.userName}>{user.username}</p>
-            <p style={styles.userRole}>🔧 Artisan</p>
+            <p style={styles.userRole}>ARTISAN</p>
           </div>
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
@@ -585,10 +626,11 @@ const DashboardArtisan = () => {
         <motion.div style={styles.header}
           initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div>
+            <p style={styles.eyebrow}>ESPACE ARTISAN</p>
             <h1 style={styles.headerTitle}>
-              {activeMenu === 'demandes' && '📋 Demandes disponibles'}
-              {activeMenu === 'mes_offres' && '💼 Mes Offres'}
-              {activeMenu === 'profil' && '👤 Mon Profil'}
+              {activeMenu === 'demandes' && 'Demandes disponibles'}
+              {activeMenu === 'mes_offres' && 'Mes offres'}
+              {activeMenu === 'profil' && 'Mon profil'}
             </h1>
             <p style={styles.headerSubtitle}>
               {activeMenu === 'demandes' && `${demandes.length} demande(s) ouverte(s)`}
@@ -610,8 +652,19 @@ const DashboardArtisan = () => {
   );
 };
 
+const FONT_DISPLAY = "'Space Grotesk', 'Segoe UI', sans-serif";
+
 const styles = {
-  container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f8faff' },
+  container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f4f6fb' },
+  pagination: {
+    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px',
+    padding: '30px 0 10px',
+  },
+  pageBtn: {
+    border: 'none', backgroundColor: '#1a1a2e', color: '#fff',
+    padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
+  },
+  pageInfo: { fontFamily: FONT_DISPLAY, fontSize: '13px', color: '#666', fontWeight: '600' },
   sidebar: {
     width: '260px', backgroundColor: '#1a1a2e',
     display: 'flex', flexDirection: 'column',
@@ -629,7 +682,7 @@ const styles = {
     color: '#fff', fontSize: '18px', fontWeight: '800',
   },
   userName: { color: '#fff', fontSize: '14px', fontWeight: '700', margin: 0 },
-  userRole: { color: '#00c853', fontSize: '12px', margin: 0 },
+  userRole: { color: '#00c853', fontSize: '11px', fontWeight: 600, letterSpacing: '1px', margin: 0 },
   menuItem: {
     display: 'flex', alignItems: 'center', gap: '12px',
     padding: '12px 16px', borderRadius: '10px',
@@ -648,8 +701,12 @@ const styles = {
   },
   main: { marginLeft: '260px', flex: 1, padding: '40px' },
   header: { marginBottom: '30px' },
-  headerTitle: { fontSize: '28px', fontWeight: '800', color: '#1a1a2e', margin: 0 },
-  headerSubtitle: { fontSize: '14px', color: '#888', margin: '5px 0 0' },
+  eyebrow: {
+    margin: '0 0 4px', fontFamily: FONT_DISPLAY, fontSize: '11px', fontWeight: 600,
+    letterSpacing: '1.4px', color: '#00a844',
+  },
+  headerTitle: { fontFamily: FONT_DISPLAY, fontSize: '26px', fontWeight: '700', color: '#1a1a2e', margin: 0 },
+  headerSubtitle: { fontSize: '14px', color: '#8a90a3', margin: '5px 0 0' },
   filtres: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '25px' },
   filtreBtn: {
     padding: '8px 16px', borderRadius: '20px', border: 'none',
@@ -660,8 +717,8 @@ const styles = {
     gap: '20px',
   },
   demandeCard: {
-    backgroundColor: '#fff', borderRadius: '16px', padding: '25px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.05)', cursor: 'pointer',
+    backgroundColor: '#fff', borderRadius: '18px', padding: '25px',
+    boxShadow: '0 4px 24px rgba(20,30,60,0.08)', cursor: 'pointer',
   },
   demandeCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
   demandeCardIcon: { fontSize: '30px' },
@@ -670,11 +727,11 @@ const styles = {
     padding: '4px 10px', borderRadius: '10px',
     fontSize: '12px', fontWeight: '700',
   },
-  demandeCardTitle: { fontSize: '16px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 8px' },
-  demandeCardDesc: { fontSize: '13px', color: '#888', lineHeight: '1.6', margin: '0 0 15px' },
+  demandeCardTitle: { fontFamily: FONT_DISPLAY, fontSize: '16px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 8px' },
+  demandeCardDesc: { fontSize: '13px', color: '#8a90a3', lineHeight: '1.6', margin: '0 0 15px' },
   demandeCardInfo: { display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: '#555', marginBottom: '15px' },
-  demandeCardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid #f0f0f0', paddingTop: '12px' },
-  clientInfo: { fontSize: '13px', color: '#888' },
+  demandeCardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #e2e5ee', paddingTop: '12px' },
+  clientInfo: { fontSize: '13px', color: '#8a90a3' },
   offreBtn: {
     padding: '8px 16px', backgroundColor: '#1a73e8',
     color: '#fff', border: 'none', borderRadius: '10px',
@@ -686,12 +743,12 @@ const styles = {
     fontSize: '12px', fontWeight: '700',
   },
   offreRow: {
-    backgroundColor: '#fff', borderRadius: '14px', padding: '20px 25px',
+    backgroundColor: '#fff', borderRadius: '16px', padding: '20px 25px',
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: '15px', boxShadow: '0 4px 15px rgba(0,0,0,0.05)',
+    marginBottom: '15px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)',
   },
-  offreRowTitle: { fontSize: '15px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 5px' },
-  offreRowMsg: { fontSize: '13px', color: '#888', margin: 0 },
+  offreRowTitle: { fontFamily: FONT_DISPLAY, fontSize: '15px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 5px' },
+  offreRowMsg: { fontSize: '13px', color: '#8a90a3', margin: 0 },
   statutBadge: { padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
   contactBtn: { marginTop: '8px', padding: '6px 14px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'block' },
   emptyBox: {
@@ -710,8 +767,8 @@ const styles = {
     color: '#fff', fontSize: '36px', fontWeight: '800',
   },
   profileCard: {
-    backgroundColor: '#fff', borderRadius: '16px', padding: '25px',
-    boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+    backgroundColor: '#fff', borderRadius: '18px', padding: '25px',
+    boxShadow: '0 4px 24px rgba(20,30,60,0.08)',
   },
   profileRow: {
     display: 'flex', alignItems: 'center', gap: '12px',
@@ -727,8 +784,8 @@ const styles = {
     backgroundColor: '#fff', borderRadius: '20px',
     padding: '40px', width: '500px', maxWidth: '90vw',
   },
-  modalTitle: { fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 5px' },
-  modalSubtitle: { fontSize: '14px', color: '#888', margin: '0 0 25px' },
+  modalTitle: { fontFamily: FONT_DISPLAY, fontSize: '22px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 5px' },
+  modalSubtitle: { fontSize: '14px', color: '#8a90a3', margin: '0 0 25px' },
   offreErrorBox: { backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' },
   formGroup: { marginBottom: '18px' },
   label: { fontSize: '14px', fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' },
