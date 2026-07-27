@@ -27,6 +27,7 @@ const DashboardArtisan = () => {
   const [offreForm, setOffreForm] = useState({ prix_propose: '', message: '' });
   const [offreLoading, setOffreLoading] = useState(false);
   const [offreSuccess, setOffreSuccess] = useState(false);
+  const [offreError, setOffreError] = useState('');
   const [mesOffres, setMesOffres] = useState([]);
 
   // Évaluations reçues
@@ -93,6 +94,11 @@ const DashboardArtisan = () => {
 
   const soumettreOffre = async () => {
     if (!offreForm.prix_propose || !offreForm.message) return;
+    if (Number(offreForm.prix_propose) <= 0) {
+      setOffreError('Le prix proposé doit être supérieur à 0');
+      return;
+    }
+    setOffreError('');
     setOffreLoading(true);
     try {
       await api.post('/offres/', {
@@ -105,7 +111,7 @@ const DashboardArtisan = () => {
       fetchMesOffres();
       setTimeout(() => setOffreSuccess(false), 3000);
     } catch (err) {
-      console.error(err);
+      setOffreError(err.response?.data?.error || "L'offre n'a pas pu être envoyée. Réessayez.");
     } finally {
       setOffreLoading(false);
     }
@@ -119,6 +125,7 @@ const DashboardArtisan = () => {
   const menuItems = [
     { id: 'demandes', icon: '📋', label: 'Demandes disponibles' },
     { id: 'mes_offres', icon: '💼', label: 'Mes offres' },
+    { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'profil', icon: '👤', label: 'Mon profil' },
   ];
 
@@ -186,7 +193,7 @@ const DashboardArtisan = () => {
                   ) : (
                     <motion.button
                       style={styles.offreBtn}
-                      onClick={() => setOffreModal(d)}
+                      onClick={() => { setOffreModal(d); setOffreError(''); }}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
                     >
@@ -201,6 +208,11 @@ const DashboardArtisan = () => {
       )}
     </div>
   );
+
+  const contacterClient = async (demandeId) => {
+    const res = await api.post('/conversations/', { demande: demandeId });
+    navigate(`/messages?conversation=${res.data.id}`);
+  };
 
   const renderMesOffres = () => (
     <div>
@@ -231,6 +243,13 @@ const DashboardArtisan = () => {
               }}>
                 {o.demande_statut === 'terminee' ? '🏁 Terminée' : o.est_acceptee ? '✅ Acceptée' : '⏳ En attente'}
               </span>
+              <motion.button
+                style={styles.contactBtn}
+                whileHover={{ scale: 1.05 }}
+                onClick={() => contacterClient(o.demande)}
+              >
+                💬 Contacter
+              </motion.button>
             </div>
           </motion.div>
         ))
@@ -399,9 +418,12 @@ const DashboardArtisan = () => {
               exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
               <h2 style={styles.modalTitle}>💼 Soumettre une offre</h2>
               <p style={styles.modalSubtitle}>{offreModal.titre}</p>
+              {offreError && (
+                <div style={styles.offreErrorBox}>❌ {offreError}</div>
+              )}
               <div style={styles.formGroup}>
                 <label style={styles.label}>Prix proposé (TND) *</label>
-                <input type="number" placeholder="ex: 150"
+                <input type="number" min="1" placeholder="ex: 150"
                   value={offreForm.prix_propose}
                   onChange={e => setOffreForm({ ...offreForm, prix_propose: e.target.value })}
                   style={styles.input} />
@@ -545,7 +567,7 @@ const DashboardArtisan = () => {
           {menuItems.map(item => (
             <motion.div key={item.id}
               style={{ ...styles.menuItem, ...(activeMenu === item.id ? styles.menuItemActive : {}) }}
-              onClick={() => setActiveMenu(item.id)}
+              onClick={() => item.id === 'messages' ? navigate('/messages') : setActiveMenu(item.id)}
               whileHover={{ x: 5 }} whileTap={{ scale: 0.97 }}>
               <span style={{ fontSize: '18px' }}>{item.icon}</span>
               <span>{item.label}</span>
@@ -671,6 +693,7 @@ const styles = {
   offreRowTitle: { fontSize: '15px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 5px' },
   offreRowMsg: { fontSize: '13px', color: '#888', margin: 0 },
   statutBadge: { padding: '5px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: '700' },
+  contactBtn: { marginTop: '8px', padding: '6px 14px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '12px', fontWeight: '700', cursor: 'pointer', display: 'block' },
   emptyBox: {
     display: 'flex', flexDirection: 'column',
     alignItems: 'center', padding: '60px', textAlign: 'center', gap: '10px',
@@ -706,6 +729,7 @@ const styles = {
   },
   modalTitle: { fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 5px' },
   modalSubtitle: { fontSize: '14px', color: '#888', margin: '0 0 25px' },
+  offreErrorBox: { backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' },
   formGroup: { marginBottom: '18px' },
   label: { fontSize: '14px', fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' },
   input: {

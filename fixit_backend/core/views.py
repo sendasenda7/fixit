@@ -5,13 +5,18 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.conf import settings
 from django.db import models
-from .models import User, Demande, Offre, Evaluation
+from django.utils.encoding import force_bytes, force_str
+from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
+from .models import User, Demande, Offre, Evaluation, Conversation, Message
 from .serializers import (
     UserSerializer, RegisterSerializer,
     DemandeSerializer, OffreSerializer, EvaluationSerializer,
-    ArtisanPublicSerializer
+    ArtisanPublicSerializer, ConversationSerializer, MessageSerializer
 )
 
 
@@ -61,6 +66,77 @@ def logout_view(request):
     except Exception:
         pass
     return Response({'message': 'Déconnexion réussie !'})
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_request(request):
+    """
+    Demande de réinitialisation de mot de passe.
+    Répond toujours avec le même message (que l'email existe ou non)
+    pour ne pas révéler quels emails sont enregistrés.
+    """
+    email = request.data.get('email', '').strip()
+    message_generique = {
+        'message': "Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé."
+    }
+    if not email:
+        return Response({'error': "L'email est requis"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # .first() plutôt que .get() : l'email n'est pas unique en base (AbstractUser
+    # ne l'impose pas), donc .get() planterait avec MultipleObjectsReturned s'il
+    # existe déjà des comptes en doublon.
+    user = User.objects.filter(email=email).exclude(email='').first()
+    if not user:
+        return Response(message_generique, status=status.HTTP_200_OK)
+
+    uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    lien = f"{settings.FRONTEND_URL}/reset-password/{uidb64}/{token}"
+
+    send_mail(
+        subject="Réinitialisation de votre mot de passe FixIt",
+        message=(
+            f"Bonjour {user.username},\n\n"
+            f"Clique sur ce lien pour choisir un nouveau mot de passe :\n{lien}\n\n"
+            f"Si tu n'es pas à l'origine de cette demande, ignore cet email.\n\n"
+            f"— L'équipe FixIt"
+        ),
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[email],
+        fail_silently=True,
+    )
+    return Response(message_generique, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def password_reset_confirm(request):
+    """Valide le lien (uidb64 + token) et applique le nouveau mot de passe"""
+    uidb64 = request.data.get('uidb64', '')
+    token = request.data.get('token', '')
+    nouveau_mot_de_passe = request.data.get('nouveau_mot_de_passe', '')
+
+    if not uidb64 or not token or not nouveau_mot_de_passe:
+        return Response({'error': 'Champs manquants'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        uid = force_str(urlsafe_base64_decode(uidb64))
+        user = User.objects.get(pk=uid)
+    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
+        return Response({'error': 'Lien de réinitialisation invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not default_token_generator.check_token(user, token):
+        return Response({'error': 'Ce lien est invalide ou a expiré'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        validate_password(nouveau_mot_de_passe, user=user)
+    except ValidationError as e:
+        return Response({'error': e.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+    user.set_password(nouveau_mot_de_passe)
+    user.save()
+    return Response({'message': 'Mot de passe réinitialisé avec succès !'})
 
 
 @api_view(['GET', 'PUT'])
@@ -151,9 +227,11 @@ def demandes_list(request):
             qs = qs.filter(statut=statut)
         return Response(DemandeSerializer(qs, many=True).data)
 
-    # POST : nécessite d'être connecté
+    # POST : nécessite d'être connecté ET d'être un client
     if not request.user.is_authenticated:
         return Response({'error': 'Authentification requise'}, status=status.HTTP_401_UNAUTHORIZED)
+    if request.user.role != 'client':
+        return Response({'error': 'Seul un client peut publier une demande'}, status=status.HTTP_403_FORBIDDEN)
 
     serializer = DemandeSerializer(data=request.data)
     if serializer.is_valid():
@@ -208,6 +286,13 @@ def offres_list(request):
     # Seul un artisan peut faire une offre
     if request.user.role != 'artisan':
         return Response({'error': 'Seul un artisan peut soumettre une offre'}, status=status.HTTP_403_FORBIDDEN)
+
+    demande_id = request.data.get('demande')
+    if Offre.objects.filter(demande_id=demande_id, artisan=request.user).exists():
+        return Response(
+            {'error': 'Vous avez déjà soumis une offre sur cette demande. Modifiez-la plutôt que d’en créer une nouvelle.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     serializer = OffreSerializer(data=request.data)
     if serializer.is_valid():
@@ -299,3 +384,76 @@ def evaluer_artisan(request, offre_id):
         offre.demande.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+# ================================
+# CONVERSATIONS & MESSAGES
+# ================================
+def _est_participant(conversation, user):
+    """Vérifie que l'utilisateur fait partie de la conversation (client ou artisan concerné)"""
+    return conversation.demande.client == user or conversation.artisan == user
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def conversations_list(request):
+    if request.method == 'GET':
+        # Mes conversations, en tant que client (via mes demandes) ou en tant qu'artisan
+        conversations = Conversation.objects.filter(
+            models.Q(demande__client=request.user) | models.Q(artisan=request.user)
+        ).order_by('-date_creation')
+        serializer = ConversationSerializer(conversations, many=True, context={'request': request})
+        return Response(serializer.data)
+
+    # POST : créer (ou récupérer) une conversation pour une demande donnée
+    demande_id = request.data.get('demande')
+    artisan_id = request.data.get('artisan')
+
+    try:
+        demande = Demande.objects.get(pk=demande_id)
+    except Demande.DoesNotExist:
+        return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.user.role == 'artisan':
+        artisan = request.user
+    else:
+        # Seul le client propriétaire de la demande peut initier une conversation avec un artisan
+        if demande.client != request.user:
+            return Response({'error': 'Non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            artisan = User.objects.get(pk=artisan_id, role='artisan')
+        except User.DoesNotExist:
+            return Response({'error': 'Artisan introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    conversation, _ = Conversation.objects.get_or_create(demande=demande, artisan=artisan)
+    serializer = ConversationSerializer(conversation, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def messages_list(request, conversation_id):
+    try:
+        conversation = Conversation.objects.get(pk=conversation_id)
+    except Conversation.DoesNotExist:
+        return Response({'error': 'Conversation introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if not _est_participant(conversation, request.user):
+        return Response({'error': 'Non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == 'GET':
+        # Marquer comme lus les messages envoyés par l'autre participant
+        conversation.messages.exclude(expediteur=request.user).filter(lu=False).update(lu=True)
+        messages = conversation.messages.all()
+        return Response(MessageSerializer(messages, many=True).data)
+
+    contenu = request.data.get('contenu', '').strip()
+    if not contenu:
+        return Response({'error': 'Le message ne peut pas être vide'}, status=status.HTTP_400_BAD_REQUEST)
+
+    message = Message.objects.create(
+        conversation=conversation,
+        expediteur=request.user,
+        contenu=contenu
+    )
+    return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)

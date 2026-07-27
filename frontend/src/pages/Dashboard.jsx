@@ -11,6 +11,7 @@ import {
 
 // ===== COMPOSANT OFFRES PAR DEMANDE =====
 const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
+  const navigate = useNavigate();
   const [offres, setOffres] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +26,11 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
     await api.post(`/offres/${offreId}/accepter/`);
     const res = await api.get(`/offres/demande/${demande.id}/`);
     setOffres(res.data);
+  };
+
+  const contacterArtisan = async (artisanId) => {
+    const res = await api.post('/conversations/', { demande: demande.id, artisan: artisanId });
+    navigate(`/messages?conversation=${res.data.id}`);
   };
 
   return (
@@ -59,6 +65,10 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+            <motion.button style={styles.contactBtn} whileHover={{ scale: 1.05 }}
+              onClick={() => contacterArtisan(o.artisan)}>
+              💬 Contacter
+            </motion.button>
             {o.est_acceptee ? (
               <>
                 <span style={{ ...styles.statutBadge, backgroundColor: '#e8f5e9', color: '#2e7d32' }}>
@@ -85,6 +95,17 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
 };
 
 // ===== DASHBOARD PRINCIPAL =====
+// ===== SPÉCIALITÉS (mêmes options que côté artisan) =====
+const specialitesDisponibles = [
+  { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
+  { id: 'electricite', icon: '⚡', label: 'Électricité' },
+  { id: 'peinture', icon: '🎨', label: 'Peinture' },
+  { id: 'reparation', icon: '🔨', label: 'Réparation' },
+  { id: 'climatisation', icon: '❄️', label: 'Climatisation' },
+  { id: 'menuiserie', icon: '🪚', label: 'Menuiserie' },
+  { id: 'autre', icon: '🔧', label: 'Autre' },
+];
+
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuth();
@@ -118,8 +139,6 @@ const Dashboard = () => {
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Notifications (préférences locales)
-  const [notifOffres, setNotifOffres] = useState(true);
-  const [notifMessages, setNotifMessages] = useState(false);
 
   // Bascule mode artisan
   const [artisanModeLoading, setArtisanModeLoading] = useState(false);
@@ -161,6 +180,7 @@ const Dashboard = () => {
   const handleLogout = () => logout();
 
   const [confirmArtisanModalOpen, setConfirmArtisanModalOpen] = useState(false);
+  const [specialiteChoisie, setSpecialiteChoisie] = useState('');
   const [deleteDemandeModal, setDeleteDemandeModal] = useState(null);
   const [deleteDemandeLoading, setDeleteDemandeLoading] = useState(false);
 
@@ -178,12 +198,19 @@ const Dashboard = () => {
   };
 
   const executerBasculeModeArtisan = async () => {
-    setConfirmArtisanModalOpen(false);
     const newRole = user.role === 'artisan' ? 'client' : 'artisan';
+    if (newRole === 'artisan' && !specialiteChoisie) {
+      setArtisanModeError('Choisis ta spécialité pour continuer');
+      return;
+    }
+    setConfirmArtisanModalOpen(false);
     setArtisanModeError('');
     setArtisanModeLoading(true);
     try {
-      const res = await api.put('/profile/', { role: newRole });
+      const payload = newRole === 'artisan'
+        ? { role: newRole, specialite: specialiteChoisie }
+        : { role: newRole };
+      const res = await api.put('/profile/', payload);
       updateUser(res.data);
       navigate('/dashboard'); // App.js redirige automatiquement vers le bon Dashboard selon le rôle
     } catch (err) {
@@ -302,6 +329,7 @@ const Dashboard = () => {
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'demandes', icon: '📋', label: 'Demandes' },
     { id: 'offres', icon: '💼', label: 'Offres' },
+    { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'profil', icon: '👤', label: 'Profil' },
     { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
   ];
@@ -581,7 +609,7 @@ const Dashboard = () => {
               style={{ ...styles.artisanBtn, backgroundColor: user.role === 'artisan' ? '#ff5252' : '#1a73e8', opacity: artisanModeLoading ? 0.6 : 1 }}
               whileHover={!artisanModeLoading ? { scale: 1.03 } : {}} whileTap={!artisanModeLoading ? { scale: 0.97 } : {}}
               disabled={artisanModeLoading}
-              onClick={() => setConfirmArtisanModalOpen(true)}>
+              onClick={() => { setSpecialiteChoisie(''); setArtisanModeError(''); setConfirmArtisanModalOpen(true); }}>
               {artisanModeLoading ? '⏳ Mise à jour...' : user.role === 'artisan' ? '🔴 Désactiver mode Artisan' : '🔧 Activer mode Artisan'}
             </motion.button>
           </motion.div>
@@ -611,23 +639,21 @@ const Dashboard = () => {
             title: '🔔 Notifications',
             items: [
               {
-                label: 'Nouvelles offres', desc: 'Recevoir des notifications pour les nouvelles offres',
+                label: 'Nouvelles offres', desc: 'Bientôt disponible',
                 action: (
-                  <motion.div style={{ ...styles.toggle, backgroundColor: notifOffres ? '#1a73e8' : '#ccc' }}
-                    onClick={() => setNotifOffres(!notifOffres)} whileTap={{ scale: 0.95 }}>
-                    <motion.div style={styles.toggleKnob} animate={{ x: notifOffres ? 22 : 2 }}
-                      transition={{ type: 'spring', stiffness: 500 }} />
-                  </motion.div>
+                  <div style={{ ...styles.toggle, backgroundColor: '#e0e0e0', cursor: 'not-allowed', opacity: 0.6 }}
+                    title="Bientôt disponible">
+                    <div style={{ ...styles.toggleKnob, transform: 'translateX(2px)' }} />
+                  </div>
                 )
               },
               {
-                label: 'Messages', desc: 'Notifications pour les nouveaux messages',
+                label: 'Messages', desc: 'Bientôt disponible',
                 action: (
-                  <motion.div style={{ ...styles.toggle, backgroundColor: notifMessages ? '#1a73e8' : '#ccc' }}
-                    onClick={() => setNotifMessages(!notifMessages)} whileTap={{ scale: 0.95 }}>
-                    <motion.div style={styles.toggleKnob} animate={{ x: notifMessages ? 22 : 2 }}
-                      transition={{ type: 'spring', stiffness: 500 }} />
-                  </motion.div>
+                  <div style={{ ...styles.toggle, backgroundColor: '#e0e0e0', cursor: 'not-allowed', opacity: 0.6 }}
+                    title="Bientôt disponible">
+                    <div style={{ ...styles.toggleKnob, transform: 'translateX(2px)' }} />
+                  </div>
                 )
               },
             ]
@@ -919,6 +945,29 @@ const Dashboard = () => {
                   ? 'Vos offres existantes resteront visibles mais vous ne pourrez plus en soumettre de nouvelles.'
                   : 'Vous pourrez répondre aux demandes des clients et proposer vos services.'}
               </p>
+
+              {user.role !== 'artisan' && (
+                <div style={{ textAlign: 'left', marginBottom: '20px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>
+                    Ta spécialité *
+                  </label>
+                  <select
+                    value={specialiteChoisie}
+                    onChange={(e) => { setSpecialiteChoisie(e.target.value); setArtisanModeError(''); }}
+                    style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px' }}
+                  >
+                    <option value="">-- Choisir --</option>
+                    {specialitesDisponibles.map((s) => (
+                      <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {artisanModeError && (
+                <p style={{ color: '#d32f2f', fontSize: '13px', marginBottom: '16px' }}>❌ {artisanModeError}</p>
+              )}
+
               <div style={{ display: 'flex', gap: '12px' }}>
                 <motion.button onClick={() => setConfirmArtisanModalOpen(false)} whileHover={{ scale: 1.03 }}
                   style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
@@ -984,7 +1033,8 @@ const Dashboard = () => {
             {menuItems.map((item) => (
               <motion.div key={item.id}
                 style={{ ...styles.menuItem, ...(activeMenu === item.id ? styles.menuItemActive : {}) }}
-                onClick={() => setActiveMenu(item.id)} whileHover={{ x: 5 }} whileTap={{ scale: 0.97 }}>
+                onClick={() => item.id === 'messages' ? navigate('/messages') : setActiveMenu(item.id)}
+                whileHover={{ x: 5 }} whileTap={{ scale: 0.97 }}>
                 <span style={styles.menuIcon}>{item.icon}</span>
                 <span>{item.label}</span>
               </motion.div>
@@ -1085,6 +1135,7 @@ const styles = {
   emptyBtn: { padding: '10px 22px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: 'pointer', marginTop: '10px' },
   deleteBtn: { background: '#fff0f0', border: 'none', borderRadius: '8px', padding: '6px 10px', cursor: 'pointer', fontSize: '16px' },
   acceptBtn: { padding: '8px 16px', backgroundColor: '#00c853', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' },
+  contactBtn: { padding: '8px 16px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer', whiteSpace: 'nowrap' },
   evalBtn: { padding: '6px 14px', backgroundColor: '#ff9800', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '12px', fontWeight: '700', cursor: 'pointer' },
   profileCover: { background: 'linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%)', borderRadius: '20px', padding: '40px', display: 'flex', alignItems: 'center', gap: '25px', marginBottom: '25px' },
   profileAvatarBig: { width: '80px', height: '80px', borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '36px', fontWeight: '800', border: '3px solid rgba(255,255,255,0.5)' },

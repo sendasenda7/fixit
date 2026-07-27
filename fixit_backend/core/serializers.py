@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Demande, Offre, Evaluation
+from .models import User, Demande, Offre, Evaluation, Conversation, Message
 
 
 # ================================
@@ -55,18 +55,27 @@ class RegisterSerializer(serializers.ModelSerializer):
             'password',
             'role',
             'telephone',
-            'adresse'
+            'adresse',
+            'specialite',
         ]
+
+    def validate_email(self, value):
+        if value and User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('Un compte existe déjà avec cet email.')
+        return value
 
     def create(self, validated_data):
         # Crée un utilisateur avec mot de passe crypté
+        # .get(...) partout : tous ces champs sont optionnels côté serializer,
+        # donc on ne doit jamais supposer qu'ils sont présents dans validated_data
         user = User.objects.create_user(
             username=validated_data['username'],
-            email=validated_data['email'],
+            email=validated_data.get('email', ''),
             password=validated_data['password'],
             role=validated_data.get('role', 'client'),
             telephone=validated_data.get('telephone', ''),
-            adresse=validated_data.get('adresse', '')
+            adresse=validated_data.get('adresse', ''),
+            specialite=validated_data.get('specialite', ''),
         )
         return user
 
@@ -88,6 +97,11 @@ class DemandeSerializer(serializers.ModelSerializer):
             'client': {'read_only': True}  
         }
 
+    def validate_budget(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le budget doit être supérieur à 0.')
+        return value
+
 # ================================
 # SERIALIZER OFFRE
 # ================================
@@ -106,6 +120,11 @@ class OffreSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'artisan': {'read_only': True}  # ← ajoute ça
         }
+
+    def validate_prix_propose(self, value):
+        if value <= 0:
+            raise serializers.ValidationError('Le prix proposé doit être supérieur à 0.')
+        return value
 
 # ================================
 # SERIALIZER EVALUATION
@@ -127,3 +146,52 @@ class EvaluationSerializer(serializers.ModelSerializer):
             'client': {'read_only': True},
             'artisan': {'read_only': True},
         }
+
+
+# ================================
+# SERIALIZER MESSAGE
+# ================================
+class MessageSerializer(serializers.ModelSerializer):
+    expediteur_nom = serializers.CharField(source='expediteur.username', read_only=True)
+
+    class Meta:
+        model = Message
+        fields = [
+            'id', 'conversation', 'expediteur', 'expediteur_nom',
+            'contenu', 'date_creation', 'lu'
+        ]
+        extra_kwargs = {
+            'conversation': {'read_only': True},
+            'expediteur': {'read_only': True},
+        }
+
+
+# ================================
+# SERIALIZER CONVERSATION
+# ================================
+class ConversationSerializer(serializers.ModelSerializer):
+    artisan_nom = serializers.CharField(source='artisan.username', read_only=True)
+    client_nom = serializers.CharField(source='demande.client.username', read_only=True)
+    demande_titre = serializers.CharField(source='demande.titre', read_only=True)
+    demande_statut = serializers.CharField(source='demande.statut', read_only=True)
+    demande_type_service = serializers.CharField(source='demande.type_service', read_only=True)
+    dernier_message = serializers.SerializerMethodField()
+    non_lus = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Conversation
+        fields = [
+            'id', 'demande', 'demande_titre', 'demande_statut', 'demande_type_service',
+            'artisan', 'artisan_nom', 'client_nom', 'date_creation', 'dernier_message', 'non_lus'
+        ]
+
+    def get_dernier_message(self, obj):
+        dernier = obj.messages.last()
+        if not dernier:
+            return None
+        return MessageSerializer(dernier).data
+
+    def get_non_lus(self, obj):
+        # Nombre de messages non lus, envoyés par l'AUTRE utilisateur
+        user = self.context['request'].user
+        return obj.messages.exclude(expediteur=user).filter(lu=False).count()

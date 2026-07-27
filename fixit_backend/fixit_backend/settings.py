@@ -163,3 +163,24 @@ SIMPLE_JWT = {
 
 # Dire à Django d'utiliser notre modèle User personnalisé
 AUTH_USER_MODEL = 'core.User'
+
+# ================================
+# EMAIL (utilisé pour "mot de passe oublié")
+# ================================
+# En dev (DEBUG=True) : les emails s'affichent dans le terminal du serveur
+# au lieu d'être réellement envoyés. Pour brancher un vrai envoi en prod,
+# mets EMAIL_BACKEND=django.core.mail.backends.smtp.EmailBackend dans .env
+# et renseigne EMAIL_HOST / EMAIL_HOST_USER / EMAIL_HOST_PASSWORD.
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend' if DEBUG else 'django.core.mail.backends.smtp.EmailBackend'
+)
+EMAIL_HOST = config('EMAIL_HOST', default='localhost')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='FixIt <noreply@fixit.tn>')
+
+# URL du frontend, utilisée pour construire le lien de réinitialisation
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:3000')

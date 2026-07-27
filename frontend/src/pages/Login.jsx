@@ -172,6 +172,7 @@ const Login = () => {
             </motion.button>
           </form>
 
+          <Link to="/forgot-password" style={styles.forgotLink}>Mot de passe oublié ?</Link>
           <Link to="/" style={styles.backLink}>← Retour à l'accueil</Link>
         </motion.div>
       </motion.div>
@@ -318,6 +319,15 @@ overlay: {
     marginTop: '20px',
     color: '#888',
     fontSize: '14px',
+    textDecoration: 'none',
+  },
+  forgotLink: {
+    display: 'block',
+    textAlign: 'center',
+    marginTop: '18px',
+    color: '#1a73e8',
+    fontSize: '14px',
+    fontWeight: '600',
     textDecoration: 'none',
   },
 };

@@ -3,11 +3,14 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useAuth } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import DashboardArtisan from './pages/DashboardArtisan';
 import NouvelleDemande from './pages/NouvelleDemande';
 import ArtisansListe from './pages/ArtisansListe';
+import Messages from './pages/Messages';
 import NotFound from './pages/NotFound';
 
 const PrivateRoute = ({ children }) => {
@@ -30,12 +33,17 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/artisans" element={<ArtisansListe />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password/:uidb64/:token" element={<ResetPassword />} />
         <Route path="/register" element={<Register />} />
         <Route path="/dashboard" element={
           <PrivateRoute><DashboardRoute /></PrivateRoute>
         } />
         <Route path="/nouvelle-demande" element={
           <PrivateRoute><NouvelleDemande /></PrivateRoute>
+        } />
+        <Route path="/messages" element={
+          <PrivateRoute><Messages /></PrivateRoute>
         } />
         <Route path="*" element={<NotFound />} />
       </Routes>

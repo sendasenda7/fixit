@@ -141,6 +141,7 @@ const Step3 = ({ formData, setFormData, errors }) => (
       <input
         type="number"
         name="budget"
+        min="1"
         placeholder="ex: 150"
         value={formData.budget}
         onChange={(e) => setFormData({ ...formData, budget: e.target.value })}
@@ -226,6 +227,7 @@ const NouvelleDemande = () => {
     if (step === 3) {
       if (!formData.localisation) newErrors.localisation = 'Localisation requise';
       if (!formData.budget) newErrors.budget = 'Budget requis';
+      else if (Number(formData.budget) <= 0) newErrors.budget = 'Le budget doit être supérieur à 0';
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;

@@ -142,3 +142,53 @@ class Evaluation(models.Model):
 
     def __str__(self):
         return f"Évaluation {self.note}⭐ par {self.client.username}"
+
+
+# ================================
+# MODÈLE CONVERSATION
+# ================================
+class Conversation(models.Model):
+    # Une conversation concerne une demande précise, entre le client de
+    # cette demande et un artisan (celui qui a fait ou fera une offre).
+    demande = models.ForeignKey(
+        Demande,
+        on_delete=models.CASCADE,
+        related_name='conversations'
+    )
+    artisan = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='conversations'
+    )
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('demande', 'artisan')
+
+    def __str__(self):
+        return f"Conversation #{self.id} - {self.demande.titre} ↔ {self.artisan.username}"
+
+
+# ================================
+# MODÈLE MESSAGE
+# ================================
+class Message(models.Model):
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    expediteur = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='messages_envoyes'
+    )
+    contenu = models.TextField()
+    date_creation = models.DateTimeField(auto_now_add=True)
+    lu = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['date_creation']
+
+    def __str__(self):
+        return f"Message de {self.expediteur.username} ({self.date_creation:%d/%m %H:%M})"
