@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
+import Avatar from '../components/Avatar';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -125,6 +126,8 @@ const Dashboard = () => {
   const [profileForm, setProfileForm] = useState({ email: '', telephone: '', adresse: '' });
   const [profileError, setProfileError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   // Changement de mot de passe
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
@@ -226,15 +229,32 @@ const Dashboard = () => {
       telephone: user.telephone || '',
       adresse: user.adresse || '',
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
     setProfileError('');
     setEditProfileOpen(true);
+  };
+
+  const choisirPhoto = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
   const enregistrerProfil = async () => {
     setProfileLoading(true);
     setProfileError('');
     try {
-      const res = await api.put('/profile/', profileForm);
+      let res;
+      if (photoFile) {
+        const formData = new FormData();
+        Object.entries(profileForm).forEach(([key, value]) => formData.append(key, value));
+        formData.append('photo', photoFile);
+        res = await api.put('/profile/', formData);
+      } else {
+        res = await api.put('/profile/', profileForm);
+      }
       updateUser(res.data);
       setEditProfileOpen(false);
     } catch (err) {
@@ -548,7 +568,8 @@ const Dashboard = () => {
   const renderProfil = () => (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       <div style={styles.profileCover}>
-        <div style={styles.profileAvatarBig}>{user.username?.charAt(0).toUpperCase()}</div>
+        <Avatar photo={user.photo} name={user.username} size={80} fontSize={36}
+          background="rgba(255,255,255,0.3)" style={{ border: '3px solid rgba(255,255,255,0.5)' }} />
         <div style={styles.profileInfo}>
           <h2 style={{ color: '#fff', fontSize: '24px', fontWeight: '800', margin: 0 }}>{user.username}</h2>
           <p style={{ color: 'rgba(255,255,255,0.8)', margin: '5px 0 0' }}>
@@ -801,6 +822,18 @@ const Dashboard = () => {
                   ❌ {profileError}
                 </div>
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#1a73e8" />
+                <div>
+                  <label htmlFor="dashboard-photo-input" style={{
+                    display: 'inline-block', padding: '8px 16px', backgroundColor: '#f0f0f0',
+                    borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  }}>
+                    📷 Changer la photo
+                  </label>
+                  <input id="dashboard-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
+                </div>
+              </div>
               {[
                 { label: 'Email', name: 'email', type: 'email' },
                 { label: 'Téléphone', name: 'telephone', type: 'text' },
@@ -1024,7 +1057,7 @@ const Dashboard = () => {
             <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>It</span>
           </div>
           <div style={styles.sidebarUser}>
-            <div style={styles.userAvatar}>{user.username?.charAt(0).toUpperCase()}</div>
+            <Avatar photo={user.photo} name={user.username} size={42} fontSize={18} background="#1a73e8" />
             <div>
               <p style={styles.userName}>{user.username}</p>
               <p style={styles.userRole}>{user.role === 'artisan' ? 'ARTISAN' : 'CLIENT'}</p>

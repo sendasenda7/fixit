@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
+import Avatar from '../components/Avatar';
 import Navbar from '../components/Navbar';
 
 const specialites = [
@@ -131,7 +132,8 @@ const ArtisansListe = () => {
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -4, boxShadow: '0 14px 32px rgba(20,30,60,0.12)' }}
               >
-                <div style={styles.cardAvatar}>{a.username.charAt(0).toUpperCase()}</div>
+                <Avatar photo={a.photo} name={a.username} size={64} fontSize={26}
+                  style={{ display: 'inline-flex', marginBottom: '14px' }} />
                 <h3 style={styles.cardName}>{a.username}</h3>
                 <p style={styles.cardSpecialite}>{spec ? `${spec.icon} ${spec.label}` : '🔧 Métier non précisé'}</p>
                 {a.adresse && <p style={styles.cardAdresse}>📍 {a.adresse}</p>}

@@ -109,13 +109,14 @@ class OffreSerializer(serializers.ModelSerializer):
     artisan_nom = serializers.CharField(source='artisan.username', read_only=True)
     demande_titre = serializers.CharField(source='demande.titre', read_only=True)
     demande_statut = serializers.CharField(source='demande.statut', read_only=True)
+    demande_type_service = serializers.CharField(source='demande.type_service', read_only=True)
 
     class Meta:
         model = Offre
         fields = [
             'id', 'prix_propose', 'message', 'date_creation',
             'est_acceptee', 'artisan', 'artisan_nom', 'demande',
-            'demande_titre', 'demande_statut'
+            'demande_titre', 'demande_statut', 'demande_type_service'
         ]
         extra_kwargs = {
             'artisan': {'read_only': True}  # ← ajoute ça

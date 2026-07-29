@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
+import Avatar from '../components/Avatar';
 
 const specialites = [
   { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
@@ -21,7 +23,7 @@ const DashboardArtisan = () => {
   const { user, logout, updateUser } = useAuth();
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [activeMenu, setActiveMenu] = useState('demandes');
+  const [activeMenu, setActiveMenu] = useState('dashboard');
   const [filtreService, setFiltreService] = useState('');
   const [offreModal, setOffreModal] = useState(null); // demande sélectionnée
   const [offreForm, setOffreForm] = useState({ prix_propose: '', message: '' });
@@ -41,6 +43,8 @@ const DashboardArtisan = () => {
   const [profileForm, setProfileForm] = useState({ telephone: '', adresse: '', specialite: '' });
   const [profileError, setProfileError] = useState('');
   const [profileLoading, setProfileLoading] = useState(false);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(null);
 
   // Retour en mode client
   const [roleLoading, setRoleLoading] = useState(false);
@@ -70,11 +74,18 @@ const DashboardArtisan = () => {
   const [demandesPage, setDemandesPage] = useState(1);
   const [demandesHasNext, setDemandesHasNext] = useState(false);
   const [demandesHasPrevious, setDemandesHasPrevious] = useState(false);
+  const [rechercheQ, setRechercheQ] = useState('');
+  const [budgetMin, setBudgetMin] = useState('');
+  const [budgetMax, setBudgetMax] = useState('');
+  const [tri, setTri] = useState('recent');
 
   const fetchDemandes = async (pageToLoad = 1) => {
     try {
-      const params = new URLSearchParams({ statut: 'ouverte', page: pageToLoad });
+      const params = new URLSearchParams({ statut: 'ouverte', page: pageToLoad, tri });
       if (filtreService) params.append('type_service', filtreService);
+      if (rechercheQ) params.append('q', rechercheQ);
+      if (budgetMin) params.append('budget_min', budgetMin);
+      if (budgetMax) params.append('budget_max', budgetMax);
       const res = await api.get(`/demandes/?${params.toString()}`);
       setDemandes(res.data.results ?? res.data);
       setDemandesHasNext(Boolean(res.data.next));
@@ -104,9 +115,20 @@ const DashboardArtisan = () => {
   }, [filtreService]);
 
   useEffect(() => {
+    setDemandesPage(1);
+    fetchDemandes(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tri]);
+
+  useEffect(() => {
     fetchDemandes(demandesPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demandesPage]);
+
+  const appliquerFiltres = () => {
+    setDemandesPage(1);
+    fetchDemandes(1);
+  };
 
   const soumettreOffre = async () => {
     if (!offreForm.prix_propose || !offreForm.message) return;
@@ -139,6 +161,7 @@ const DashboardArtisan = () => {
   }[type] || '🔧');
 
   const menuItems = [
+    { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'demandes', icon: '📋', label: 'Demandes disponibles' },
     { id: 'mes_offres', icon: '💼', label: 'Mes offres' },
     { id: 'messages', icon: '💬', label: 'Messages' },
@@ -170,6 +193,44 @@ const DashboardArtisan = () => {
              s === 'menuiserie' ? '🪚 Menuiserie' : '🔧 Autre'}
           </motion.button>
         ))}
+      </div>
+
+      {/* Filtres avancés */}
+      <div style={styles.filtresAvances}>
+        <input
+          type="text"
+          placeholder="🔍 Rechercher (titre, description, lieu)"
+          value={rechercheQ}
+          onChange={e => setRechercheQ(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
+          style={styles.filtreInput}
+        />
+        <input
+          type="number"
+          placeholder="Budget min"
+          value={budgetMin}
+          onChange={e => setBudgetMin(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
+          style={{ ...styles.filtreInput, width: '110px' }}
+        />
+        <input
+          type="number"
+          placeholder="Budget max"
+          value={budgetMax}
+          onChange={e => setBudgetMax(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
+          style={{ ...styles.filtreInput, width: '110px' }}
+        />
+        <select value={tri} onChange={e => setTri(e.target.value)} style={styles.filtreSelect}>
+          <option value="recent">Plus récentes</option>
+          <option value="ancien">Plus anciennes</option>
+          <option value="budget_desc">Budget décroissant</option>
+          <option value="budget_asc">Budget croissant</option>
+        </select>
+        <motion.button onClick={appliquerFiltres} whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+          style={styles.filtreApplyBtn}>
+          Appliquer
+        </motion.button>
       </div>
 
       {loading ? (
@@ -303,15 +364,32 @@ const DashboardArtisan = () => {
       adresse: user.adresse || '',
       specialite: user.specialite || '',
     });
+    setPhotoFile(null);
+    setPhotoPreview(null);
     setProfileError('');
     setEditProfileOpen(true);
+  };
+
+  const choisirPhoto = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
 
   const enregistrerProfil = async () => {
     setProfileLoading(true);
     setProfileError('');
     try {
-      const res = await api.put('/profile/', profileForm);
+      let res;
+      if (photoFile) {
+        const formData = new FormData();
+        Object.entries(profileForm).forEach(([key, value]) => formData.append(key, value));
+        formData.append('photo', photoFile);
+        res = await api.put('/profile/', formData);
+      } else {
+        res = await api.put('/profile/', profileForm);
+      }
       updateUser(res.data);
       setEditProfileOpen(false);
     } catch (err) {
@@ -339,10 +417,167 @@ const DashboardArtisan = () => {
     }
   };
 
+  const offresParMois = (() => {
+    const now = new Date();
+    const moisLabels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+    const buckets = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      buckets.push({ year: d.getFullYear(), month: d.getMonth(), mois: moisLabels[d.getMonth()], offres: 0 });
+    }
+    mesOffres.forEach(o => {
+      const created = new Date(o.date_creation);
+      const bucket = buckets.find(b => b.year === created.getFullYear() && b.month === created.getMonth());
+      if (bucket) bucket.offres += 1;
+    });
+    return buckets;
+  })();
+
+  const offresParService = [
+    { name: 'Plomberie', value: mesOffres.filter(o => o.demande_type_service === 'plomberie').length },
+    { name: 'Électricité', value: mesOffres.filter(o => o.demande_type_service === 'electricite').length },
+    { name: 'Peinture', value: mesOffres.filter(o => o.demande_type_service === 'peinture').length },
+    { name: 'Réparation', value: mesOffres.filter(o => o.demande_type_service === 'reparation').length },
+    { name: 'Autre', value: mesOffres.filter(o => !['plomberie', 'electricite', 'peinture', 'reparation'].includes(o.demande_type_service)).length },
+  ].filter(d => d.value > 0);
+
+  const prixParService = ['plomberie', 'electricite', 'peinture', 'reparation', 'autre'].map(type => ({
+    service: type.charAt(0).toUpperCase() + type.slice(1),
+    prix: (() => {
+      const filtered = mesOffres.filter(o => o.demande_type_service === type);
+      if (!filtered.length) return 0;
+      return Math.round(filtered.reduce((sum, o) => sum + parseFloat(o.prix_propose), 0) / filtered.length);
+    })()
+  })).filter(d => d.prix > 0);
+
+  const COLORS = ['#1a73e8', '#00c853', '#ff9800', '#e91e63', '#9c27b0'];
+
+  const renderDashboardArtisan = () => (
+    <div>
+      <div style={styles.statsGrid}>
+        {[
+          { icon: '💼', label: 'Total offres', value: mesOffres.length, color: '#1a73e8', bg: '#e8f4fd' },
+          { icon: '✅', label: 'Acceptées', value: mesOffres.filter(o => o.est_acceptee).length, color: '#00c853', bg: '#e8f5e9' },
+          { icon: '⏳', label: 'En attente', value: mesOffres.filter(o => !o.est_acceptee).length, color: '#ff9800', bg: '#fff3e0' },
+          { icon: '💰', label: 'Revenu généré (DT)', value: mesOffres.filter(o => o.est_acceptee).reduce((s, o) => s + parseFloat(o.prix_propose), 0).toFixed(0), color: '#9c27b0', bg: '#f3e5f5' },
+        ].map((stat, i) => (
+          <motion.div key={stat.label} style={{ ...styles.statCard, backgroundColor: stat.bg }}
+            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.1 }} whileHover={{ y: -5, boxShadow: '0 15px 35px rgba(0,0,0,0.1)' }}>
+            <div style={styles.statIcon}>{stat.icon}</div>
+            <div>
+              <motion.p style={{ ...styles.statValue, color: stat.color }}
+                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                transition={{ delay: i * 0.1 + 0.3, type: 'spring' }}>
+                {stat.value}
+              </motion.p>
+              <p style={styles.statLabel}>{stat.label}</p>
+            </div>
+          </motion.div>
+        ))}
+      </div>
+
+      <div style={styles.chartsRow}>
+        <motion.div style={styles.chartCard}
+          initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
+          <h3 style={styles.chartTitle}>📈 Offres par mois</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={offresParMois}>
+              <defs>
+                <linearGradient id="colorOffres" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#00c853" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#00c853" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="mois" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} allowDecimals={false} />
+              <Tooltip />
+              <Area type="monotone" dataKey="offres" stroke="#00c853" strokeWidth={3} fill="url(#colorOffres)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </motion.div>
+
+        <motion.div style={styles.chartCard}
+          initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <h3 style={styles.chartTitle}>🍩 Répartition par service</h3>
+          {offresParService.length === 0 ? (
+            <div style={{ padding: '60px 0', textAlign: 'center', color: '#8a90a3' }}>
+              Pas encore d'offres à répartir
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={offresParService} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
+                  {offresParService.map((entry, index) => (
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip /><Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
+        </motion.div>
+      </div>
+
+      {prixParService.length > 0 && (
+        <motion.div style={styles.chartCardFull}
+          initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <h3 style={styles.chartTitle}>💰 Prix moyen proposé par service (TND)</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={prixParService}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="service" tick={{ fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 12 }} />
+              <Tooltip />
+              <Bar dataKey="prix" radius={[8, 8, 0, 0]}>
+                {prixParService.map((entry, index) => (
+                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </motion.div>
+      )}
+
+      <motion.div style={styles.tableCard}
+        initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+        <div style={styles.tableHeader}>
+          <h3 style={{ ...styles.chartTitle, margin: 0 }}>📋 Dernières offres</h3>
+        </div>
+        {mesOffres.length === 0 ? (
+          <div style={styles.emptyBox}>
+            <p style={{ fontSize: '40px' }}>📭</p>
+            <p style={{ color: '#8a90a3' }}>Aucune offre pour l'instant</p>
+          </div>
+        ) : (
+          mesOffres.slice(0, 5).map(o => (
+            <div key={o.id} style={styles.demandeRow}>
+              <div>
+                <p style={styles.demandeRowTitle}>{o.demande_titre}</p>
+                <p style={{ fontSize: '12px', color: '#8a90a3', margin: 0 }}>
+                  {o.prix_propose} DT · {new Date(o.date_creation).toLocaleDateString('fr-FR')}
+                </p>
+              </div>
+              <span style={{
+                ...styles.statutBadge,
+                backgroundColor: o.est_acceptee ? '#e8f5e9' : '#fff3e0',
+                color: o.est_acceptee ? '#2e7d32' : '#e65100',
+              }}>
+                {o.est_acceptee ? 'Acceptée' : 'En attente'}
+              </span>
+            </div>
+          ))
+        )}
+      </motion.div>
+    </div>
+  );
+
   const renderProfil = () => (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       <div style={styles.profileCover}>
-        <div style={styles.profileAvatar}>{user.username?.charAt(0).toUpperCase()}</div>
+        <Avatar photo={user.photo} name={user.username} size={80} fontSize={36}
+          background="rgba(255,255,255,0.3)" style={{ border: '3px solid rgba(255,255,255,0.5)' }} />
         <div>
           <h2 style={{ color: '#fff', fontSize: '24px', fontWeight: '800', margin: 0 }}>{user.username}</h2>
           <p style={{ color: 'rgba(255,255,255,0.8)', margin: '5px 0 0' }}>🔧 Artisan • {user.email}</p>
@@ -373,11 +608,6 @@ const DashboardArtisan = () => {
             </div>
           </div>
         ))}
-        <div style={{ marginTop: '20px', padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '10px' }}>
-          <p style={{ color: '#2e7d32', fontWeight: '700', margin: 0 }}>
-            ✅ Offres soumises : {mesOffres.length} | Acceptées : {mesOffres.filter(o => o.est_acceptee).length}
-          </p>
-        </div>
       </div>
 
       {/* Note moyenne et avis reçus */}
@@ -438,6 +668,7 @@ const DashboardArtisan = () => {
 
   const renderContent = () => {
     switch (activeMenu) {
+      case 'dashboard': return renderDashboardArtisan();
       case 'demandes': return renderDemandes();
       case 'mes_offres': return renderMesOffres();
       case 'profil': return renderProfil();
@@ -518,6 +749,18 @@ const DashboardArtisan = () => {
                   ❌ {profileError}
                 </div>
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+                <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#00c853" />
+                <div>
+                  <label htmlFor="artisan-photo-input" style={{
+                    display: 'inline-block', padding: '8px 16px', backgroundColor: '#f0f0f0',
+                    borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  }}>
+                    📷 Changer la photo
+                  </label>
+                  <input id="artisan-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
+                </div>
+              </div>
               <div style={styles.formGroup}>
                 <label style={styles.label}>Spécialité</label>
                 <select
@@ -598,7 +841,7 @@ const DashboardArtisan = () => {
           <span style={{ color: '#00c853', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>It</span>
         </div>
         <div style={styles.sidebarUser}>
-          <div style={styles.userAvatar}>{user.username?.charAt(0).toUpperCase()}</div>
+          <Avatar photo={user.photo} name={user.username} size={42} fontSize={18} background="#00c853" />
           <div>
             <p style={styles.userName}>{user.username}</p>
             <p style={styles.userRole}>ARTISAN</p>
@@ -628,11 +871,13 @@ const DashboardArtisan = () => {
           <div>
             <p style={styles.eyebrow}>ESPACE ARTISAN</p>
             <h1 style={styles.headerTitle}>
+              {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
               {activeMenu === 'demandes' && 'Demandes disponibles'}
               {activeMenu === 'mes_offres' && 'Mes offres'}
               {activeMenu === 'profil' && 'Mon profil'}
             </h1>
             <p style={styles.headerSubtitle}>
+              {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
               {activeMenu === 'demandes' && `${demandes.length} demande(s) ouverte(s)`}
               {activeMenu === 'mes_offres' && `${mesOffres.length} offre(s) soumise(s)`}
               {activeMenu === 'profil' && totalNotes > 0 && `⭐ ${moyenneNote}/5 sur ${totalNotes} avis`}
@@ -707,7 +952,20 @@ const styles = {
   },
   headerTitle: { fontFamily: FONT_DISPLAY, fontSize: '26px', fontWeight: '700', color: '#1a1a2e', margin: 0 },
   headerSubtitle: { fontSize: '14px', color: '#8a90a3', margin: '5px 0 0' },
-  filtres: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '25px' },
+  filtres: { display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' },
+  filtresAvances: { display: 'flex', gap: '10px', marginBottom: '25px', flexWrap: 'wrap', alignItems: 'center' },
+  filtreInput: {
+    padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e5ee',
+    fontSize: '13px', outline: 'none', flex: '1 1 220px', minWidth: '160px',
+  },
+  filtreSelect: {
+    padding: '10px 14px', borderRadius: '10px', border: '1px solid #e2e5ee',
+    fontSize: '13px', outline: 'none', backgroundColor: '#fff',
+  },
+  filtreApplyBtn: {
+    border: 'none', backgroundColor: '#1a73e8', color: '#fff',
+    padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+  },
   filtreBtn: {
     padding: '8px 16px', borderRadius: '20px', border: 'none',
     fontSize: '13px', fontWeight: '600', cursor: 'pointer',
@@ -769,6 +1027,22 @@ const styles = {
   profileCard: {
     backgroundColor: '#fff', borderRadius: '18px', padding: '25px',
     boxShadow: '0 4px 24px rgba(20,30,60,0.08)',
+  },
+  profileCardTitle: { fontFamily: FONT_DISPLAY, fontSize: '16px', fontWeight: '700', margin: '0 0 16px' },
+  statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '25px' },
+  statCard: { borderRadius: '18px', padding: '25px 20px', display: 'flex', alignItems: 'center', gap: '15px' },
+  statIcon: { fontSize: '35px' },
+  statValue: { fontFamily: FONT_DISPLAY, fontSize: '30px', fontWeight: '700', margin: 0 },
+  statLabel: { fontSize: '13px', color: '#888', margin: 0 },
+  chartsRow: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' },
+  chartCard: { backgroundColor: '#fff', borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
+  chartCardFull: { backgroundColor: '#fff', borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)', marginBottom: '20px' },
+  chartTitle: { fontFamily: FONT_DISPLAY, fontSize: '15px', fontWeight: '700', margin: '0 0 15px', color: '#1a1a2e' },
+  tableCard: { backgroundColor: '#fff', borderRadius: '18px', padding: '25px', boxShadow: '0 4px 24px rgba(20,30,60,0.08)' },
+  tableHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' },
+  demandeRow: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '14px 0', borderBottom: '1px dashed #e2e5ee',
   },
   profileRow: {
     display: 'flex', alignItems: 'center', gap: '12px',

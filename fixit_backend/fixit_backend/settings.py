@@ -124,6 +124,10 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# Fichiers médias (photos de profil, etc.)
+MEDIA_URL = 'media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 # Autoriser React à communiquer avec Django
 # En dev : liste blanche du frontend local. En prod : mets l'URL réelle du frontend dans .env
 CORS_ALLOWED_ORIGINS = config(

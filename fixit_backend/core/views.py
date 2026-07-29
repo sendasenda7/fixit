@@ -35,7 +35,7 @@ def register(request):
             'message': 'Compte créé avec succès !',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data
+            'user': UserSerializer(user, context={'request': request}).data
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -52,7 +52,7 @@ def login_view(request):
             'message': 'Connexion réussie !',
             'access': str(refresh.access_token),
             'refresh': str(refresh),
-            'user': UserSerializer(user).data
+            'user': UserSerializer(user, context={'request': request}).data
         })
     return Response({'error': 'Identifiants incorrects'}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -144,9 +144,8 @@ def password_reset_confirm(request):
 @permission_classes([IsAuthenticated])
 def profile(request):
     if request.method == 'GET':
-        
-        return Response(UserSerializer(request.user).data)
-    serializer = UserSerializer(request.user, data=request.data, partial=True)
+        return Response(UserSerializer(request.user, context={'request': request}).data)
+    serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
         serializer.save()
         return Response(serializer.data)
@@ -223,13 +222,43 @@ def artisans_list(request):
 def demandes_list(request):
     if request.method == 'GET':
         # Filtres optionnels : ?type_service=plomberie&statut=ouverte
-        qs = Demande.objects.all().order_by('-date_creation')
+        #                      &q=<recherche texte>&budget_min=&budget_max=&tri=
+        qs = Demande.objects.all()
         type_service = request.query_params.get('type_service')
         statut = request.query_params.get('statut')
+        q = request.query_params.get('q')
+        budget_min = request.query_params.get('budget_min')
+        budget_max = request.query_params.get('budget_max')
+        tri = request.query_params.get('tri', 'recent')
+
         if type_service:
             qs = qs.filter(type_service=type_service)
         if statut:
             qs = qs.filter(statut=statut)
+        if q:
+            qs = qs.filter(
+                models.Q(titre__icontains=q) |
+                models.Q(description__icontains=q) |
+                models.Q(localisation__icontains=q)
+            )
+        if budget_min:
+            try:
+                qs = qs.filter(budget__gte=float(budget_min))
+            except (TypeError, ValueError):
+                pass
+        if budget_max:
+            try:
+                qs = qs.filter(budget__lte=float(budget_max))
+            except (TypeError, ValueError):
+                pass
+
+        tri_map = {
+            'recent': '-date_creation',
+            'ancien': 'date_creation',
+            'budget_desc': '-budget',
+            'budget_asc': 'budget',
+        }
+        qs = qs.order_by(tri_map.get(tri, '-date_creation'))
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(qs, request)
