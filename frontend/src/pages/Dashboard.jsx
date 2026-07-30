@@ -5,6 +5,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
+import NotificationBell from '../components/NotificationBell';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -1098,6 +1099,7 @@ const Dashboard = () => {
                 {activeMenu === 'parametres' && 'Personnalisez votre expérience'}
               </p>
             </div>
+            <NotificationBell color={theme.text} />
           </motion.div>
 
           <AnimatePresence mode="wait">

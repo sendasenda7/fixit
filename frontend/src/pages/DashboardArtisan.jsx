@@ -6,6 +6,8 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
+import Pagination from '../components/Pagination';
+import NotificationBell from '../components/NotificationBell';
 
 const specialites = [
   { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
@@ -72,8 +74,8 @@ const DashboardArtisan = () => {
   };
 
   const [demandesPage, setDemandesPage] = useState(1);
-  const [demandesHasNext, setDemandesHasNext] = useState(false);
-  const [demandesHasPrevious, setDemandesHasPrevious] = useState(false);
+  const [demandesCount, setDemandesCount] = useState(0);
+  const DEMANDES_PAGE_SIZE = 12;
   const [rechercheQ, setRechercheQ] = useState('');
   const [budgetMin, setBudgetMin] = useState('');
   const [budgetMax, setBudgetMax] = useState('');
@@ -88,8 +90,7 @@ const DashboardArtisan = () => {
       if (budgetMax) params.append('budget_max', budgetMax);
       const res = await api.get(`/demandes/?${params.toString()}`);
       setDemandes(res.data.results ?? res.data);
-      setDemandesHasNext(Boolean(res.data.next));
-      setDemandesHasPrevious(Boolean(res.data.previous));
+      setDemandesCount(res.data.count ?? (res.data.results ?? res.data).length);
     } catch (err) {
       console.error(err);
     } finally {
@@ -284,28 +285,13 @@ const DashboardArtisan = () => {
         </div>
       )}
 
-      {!loading && demandes.length > 0 && (demandesHasNext || demandesHasPrevious) && (
-        <div style={styles.pagination}>
-          <motion.button
-            onClick={() => setDemandesPage(p => Math.max(1, p - 1))}
-            disabled={!demandesHasPrevious}
-            whileHover={demandesHasPrevious ? { scale: 1.03 } : {}}
-            whileTap={demandesHasPrevious ? { scale: 0.97 } : {}}
-            style={{ ...styles.pageBtn, opacity: demandesHasPrevious ? 1 : 0.4, cursor: demandesHasPrevious ? 'pointer' : 'default' }}
-          >
-            ← Précédent
-          </motion.button>
-          <span style={styles.pageInfo}>Page {demandesPage}</span>
-          <motion.button
-            onClick={() => setDemandesPage(p => p + 1)}
-            disabled={!demandesHasNext}
-            whileHover={demandesHasNext ? { scale: 1.03 } : {}}
-            whileTap={demandesHasNext ? { scale: 0.97 } : {}}
-            style={{ ...styles.pageBtn, opacity: demandesHasNext ? 1 : 0.4, cursor: demandesHasNext ? 'pointer' : 'default' }}
-          >
-            Suivant →
-          </motion.button>
-        </div>
+      {!loading && demandes.length > 0 && (
+        <Pagination
+          page={demandesPage}
+          totalPages={Math.max(1, Math.ceil(demandesCount / DEMANDES_PAGE_SIZE))}
+          onChange={setDemandesPage}
+          accentColor="#00c853"
+        />
       )}
     </div>
   );
@@ -866,7 +852,7 @@ const DashboardArtisan = () => {
 
       {/* MAIN */}
       <div style={styles.main}>
-        <motion.div style={styles.header}
+        <motion.div style={{ ...styles.header, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
           initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
           <div>
             <p style={styles.eyebrow}>ESPACE ARTISAN</p>
@@ -883,6 +869,7 @@ const DashboardArtisan = () => {
               {activeMenu === 'profil' && totalNotes > 0 && `⭐ ${moyenneNote}/5 sur ${totalNotes} avis`}
             </p>
           </div>
+          <NotificationBell />
         </motion.div>
 
         <AnimatePresence mode="wait">
@@ -901,15 +888,6 @@ const FONT_DISPLAY = "'Space Grotesk', 'Segoe UI', sans-serif";
 
 const styles = {
   container: { display: 'flex', minHeight: '100vh', backgroundColor: '#f4f6fb' },
-  pagination: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px',
-    padding: '30px 0 10px',
-  },
-  pageBtn: {
-    border: 'none', backgroundColor: '#1a1a2e', color: '#fff',
-    padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
-  },
-  pageInfo: { fontFamily: FONT_DISPLAY, fontSize: '13px', color: '#666', fontWeight: '600' },
   sidebar: {
     width: '260px', backgroundColor: '#1a1a2e',
     display: 'flex', flexDirection: 'column',

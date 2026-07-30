@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import User, Demande, Offre, Evaluation, Conversation, Message
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
 
 
 # ================================
@@ -172,7 +172,9 @@ class MessageSerializer(serializers.ModelSerializer):
 # ================================
 class ConversationSerializer(serializers.ModelSerializer):
     artisan_nom = serializers.CharField(source='artisan.username', read_only=True)
+    artisan_photo = serializers.ImageField(source='artisan.photo', read_only=True, allow_null=True)
     client_nom = serializers.CharField(source='demande.client.username', read_only=True)
+    client_photo = serializers.ImageField(source='demande.client.photo', read_only=True, allow_null=True)
     demande_titre = serializers.CharField(source='demande.titre', read_only=True)
     demande_statut = serializers.CharField(source='demande.statut', read_only=True)
     demande_type_service = serializers.CharField(source='demande.type_service', read_only=True)
@@ -183,7 +185,8 @@ class ConversationSerializer(serializers.ModelSerializer):
         model = Conversation
         fields = [
             'id', 'demande', 'demande_titre', 'demande_statut', 'demande_type_service',
-            'artisan', 'artisan_nom', 'client_nom', 'date_creation', 'dernier_message', 'non_lus'
+            'artisan', 'artisan_nom', 'artisan_photo', 'client_nom', 'client_photo',
+            'date_creation', 'dernier_message', 'non_lus'
         ]
 
     def get_dernier_message(self, obj):
@@ -196,3 +199,11 @@ class ConversationSerializer(serializers.ModelSerializer):
         # Nombre de messages non lus, envoyés par l'AUTRE utilisateur
         user = self.context['request'].user
         return obj.messages.exclude(expediteur=user).filter(lu=False).count()
+
+# ================================
+# SERIALIZER NOTIFICATION
+# ================================
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ['id', 'type', 'message', 'lien', 'lu', 'date_creation']

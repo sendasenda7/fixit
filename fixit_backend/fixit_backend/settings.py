@@ -158,6 +158,10 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        # Anti brute-force : limite les tentatives de connexion par IP
+        'login': '5/min',
+    },
 }
 
 SIMPLE_JWT = {

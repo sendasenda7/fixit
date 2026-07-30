@@ -36,4 +36,10 @@ urlpatterns = [
     path('conversations/', views.conversations_list),
     path('conversations/<int:conversation_id>/messages/', views.messages_list),
 
+    # Notifications
+    path('notifications/', views.notifications_list),
+    path('notifications/non-lues/', views.notifications_non_lues),
+    path('notifications/<int:pk>/lire/', views.notification_marquer_lue),
+    path('notifications/tout-lire/', views.notifications_tout_marquer_lu),
+
 ]

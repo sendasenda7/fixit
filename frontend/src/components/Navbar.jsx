@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -25,6 +26,7 @@ const Navbar = () => {
       <div style={styles.navButtons}>
         {user ? (
           <>
+            <NotificationBell />
             <Link to="/dashboard" style={styles.btnLogin}>Tableau de bord</Link>
             <button onClick={logout} style={{ ...styles.btnRegister, border: 'none', cursor: 'pointer' }}>
               Déconnexion
@@ -74,6 +76,7 @@ const styles = {
   },
   navButtons: {
     display: 'flex',
+    alignItems: 'center',
     gap: '12px',
   },
   btnLogin: {

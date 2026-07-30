@@ -1,7 +1,8 @@
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -12,11 +13,12 @@ from django.conf import settings
 from django.db import models
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from .models import User, Demande, Offre, Evaluation, Conversation, Message
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
 from .serializers import (
     UserSerializer, RegisterSerializer,
     DemandeSerializer, OffreSerializer, EvaluationSerializer,
-    ArtisanPublicSerializer, ConversationSerializer, MessageSerializer
+    ArtisanPublicSerializer, ConversationSerializer, MessageSerializer,
+    NotificationSerializer
 )
 from .pagination import StandardResultsSetPagination
 
@@ -42,6 +44,7 @@ def register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
@@ -55,6 +58,10 @@ def login_view(request):
             'user': UserSerializer(user, context={'request': request}).data
         })
     return Response({'error': 'Identifiants incorrects'}, status=status.HTTP_400_BAD_REQUEST)
+
+
+# Limite le nombre de tentatives de connexion (voir DEFAULT_THROTTLE_RATES dans settings.py)
+login_view.cls.throttle_scope = 'login'
 
 
 @api_view(['POST'])
@@ -344,7 +351,13 @@ def offres_list(request):
 
     serializer = OffreSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(artisan=request.user)
+        offre = serializer.save(artisan=request.user)
+        Notification.objects.create(
+            destinataire=offre.demande.client,
+            type='nouvelle_offre',
+            message=f"{request.user.username} a proposé une offre pour « {offre.demande.titre} »",
+            lien=f"demandes/{offre.demande.id}",
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -375,6 +388,13 @@ def accepter_offre(request, offre_id):
     offre.save()
     offre.demande.statut = 'en_cours'
     offre.demande.save()
+
+    Notification.objects.create(
+        destinataire=offre.artisan,
+        type='offre_acceptee',
+        message=f"Votre offre pour « {offre.demande.titre} » a été acceptée !",
+        lien=f"demandes/{offre.demande.id}",
+    )
 
     return Response({'message': 'Offre acceptée !', 'offre': OffreSerializer(offre).data})
 
@@ -430,6 +450,12 @@ def evaluer_artisan(request, offre_id):
         serializer.save(client=request.user, artisan=offre.artisan)
         offre.demande.statut = 'terminee'
         offre.demande.save()
+        Notification.objects.create(
+            destinataire=offre.artisan,
+            type='nouvel_avis',
+            message=f"{request.user.username} vous a laissé un avis pour « {offre.demande.titre} »",
+            lien=f"profil",
+        )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -504,4 +530,50 @@ def messages_list(request, conversation_id):
         expediteur=request.user,
         contenu=contenu
     )
+
+    destinataire = conversation.demande.client if request.user == conversation.artisan else conversation.artisan
+    Notification.objects.create(
+        destinataire=destinataire,
+        type='nouveau_message',
+        message=f"Nouveau message de {request.user.username} sur « {conversation.demande.titre} »",
+        lien=f"messages?conversation={conversation.id}",
+    )
+
     return Response(MessageSerializer(message).data, status=status.HTTP_201_CREATED)
+
+# ================================
+# NOTIFICATIONS
+# ================================
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notifications_list(request):
+    """Les 20 dernières notifications de l'utilisateur connecté"""
+    notifs = Notification.objects.filter(destinataire=request.user)[:20]
+    return Response(NotificationSerializer(notifs, many=True).data)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def notifications_non_lues(request):
+    """Nombre de notifications non lues (pour le badge de la cloche)"""
+    count = Notification.objects.filter(destinataire=request.user, lu=False).count()
+    return Response({'count': count})
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notification_marquer_lue(request, pk):
+    try:
+        notif = Notification.objects.get(pk=pk, destinataire=request.user)
+    except Notification.DoesNotExist:
+        return Response({'error': 'Notification introuvable'}, status=status.HTTP_404_NOT_FOUND)
+    notif.lu = True
+    notif.save()
+    return Response(NotificationSerializer(notif).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def notifications_tout_marquer_lu(request):
+    Notification.objects.filter(destinataire=request.user, lu=False).update(lu=True)
+    return Response({'message': 'Toutes les notifications ont été marquées comme lues'})

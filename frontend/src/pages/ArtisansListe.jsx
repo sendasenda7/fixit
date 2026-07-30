@@ -5,6 +5,7 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
+import Pagination from '../components/Pagination';
 import Navbar from '../components/Navbar';
 
 const specialites = [
@@ -28,8 +29,6 @@ const ArtisansListe = () => {
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
   const [count, setCount] = useState(0);
-  const [hasNext, setHasNext] = useState(false);
-  const [hasPrevious, setHasPrevious] = useState(false);
   const PAGE_SIZE = 12;
 
   useEffect(() => {
@@ -47,8 +46,6 @@ const ArtisansListe = () => {
       const res = await api.get(`/artisans/?${params.toString()}`);
       setArtisans(res.data.results ?? res.data);
       setCount(res.data.count ?? (res.data.results ?? res.data).length);
-      setHasNext(Boolean(res.data.next));
-      setHasPrevious(Boolean(res.data.previous));
     } catch (err) {
       console.error(err);
     } finally {
@@ -158,27 +155,7 @@ const ArtisansListe = () => {
       </div>
 
       {!loading && artisans.length > 0 && totalPages > 1 && (
-        <div style={styles.pagination}>
-          <motion.button
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={!hasPrevious}
-            whileHover={hasPrevious ? { scale: 1.03 } : {}}
-            whileTap={hasPrevious ? { scale: 0.97 } : {}}
-            style={{ ...styles.pageBtn, opacity: hasPrevious ? 1 : 0.4, cursor: hasPrevious ? 'pointer' : 'default' }}
-          >
-            ← Précédent
-          </motion.button>
-          <span style={styles.pageInfo}>Page {page} / {totalPages}</span>
-          <motion.button
-            onClick={() => setPage(p => p + 1)}
-            disabled={!hasNext}
-            whileHover={hasNext ? { scale: 1.03 } : {}}
-            whileTap={hasNext ? { scale: 0.97 } : {}}
-            style={{ ...styles.pageBtn, opacity: hasNext ? 1 : 0.4, cursor: hasNext ? 'pointer' : 'default' }}
-          >
-            Suivant →
-          </motion.button>
-        </div>
+        <Pagination page={page} totalPages={totalPages} onChange={setPage} />
       )}
     </div>
   );
@@ -238,15 +215,6 @@ const styles = {
     width: '100%', border: 'none', backgroundColor: '#1a73e8', color: '#fff',
     padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
   },
-  pagination: {
-    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px',
-    padding: '0 20px 54px',
-  },
-  pageBtn: {
-    border: 'none', backgroundColor: '#1a1a2e', color: '#fff',
-    padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700',
-  },
-  pageInfo: { fontFamily: FONT_DISPLAY, fontSize: '13px', color: '#666', fontWeight: '600' },
 };
 
 export default ArtisansListe;

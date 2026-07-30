@@ -23,7 +23,11 @@ const Login = () => {
     await login(formData.username, formData.password); // ← remplace l'axios.post
     navigate('/dashboard');
   } catch (err) {
-    setError('Identifiants incorrects. Réessayez !');
+    if (err.response?.status === 429) {
+      setError("Trop de tentatives. Merci de patienter avant de réessayer.");
+    } else {
+      setError('Identifiants incorrects. Réessayez !');
+    }
   } finally {
     setLoading(false);
   }

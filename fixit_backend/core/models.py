@@ -1,5 +1,14 @@
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
+
+
+def valider_taille_photo(fichier):
+    """Empêche l'upload d'une photo de profil de plus de 5 Mo."""
+    limite_mo = 5
+    if fichier.size > limite_mo * 1024 * 1024:
+        raise ValidationError(f"La photo dépasse {limite_mo} Mo. Choisissez un fichier plus léger.")
 
 # ================================
 # MODÈLE USER (Client ou Artisan)
@@ -34,7 +43,11 @@ class User(AbstractUser):
     photo = models.ImageField(
         upload_to='photos/',
         blank=True,
-        null=True
+        null=True,
+        validators=[
+            valider_taille_photo,
+            FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp']),
+        ],
     )
 
     def __str__(self):
@@ -192,3 +205,32 @@ class Message(models.Model):
 
     def __str__(self):
         return f"Message de {self.expediteur.username} ({self.date_creation:%d/%m %H:%M})"
+
+# ================================
+# MODÈLE NOTIFICATION
+# ================================
+class Notification(models.Model):
+    TYPE_CHOICES = [
+        ('nouvelle_offre', 'Nouvelle offre'),
+        ('offre_acceptee', 'Offre acceptée'),
+        ('nouveau_message', 'Nouveau message'),
+        ('nouvel_avis', 'Nouvel avis'),
+    ]
+
+    destinataire = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='notifications'
+    )
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    message = models.CharField(max_length=255)
+    # Lien optionnel : ex. 'demandes/12' ou 'messages?conv=3', interprété côté frontend
+    lien = models.CharField(max_length=255, blank=True)
+    lu = models.BooleanField(default=False)
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-date_creation']
+
+    def __str__(self):
+        return f"{self.get_type_display()} pour {self.destinataire.username}"

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import Avatar from '../components/Avatar';
 
 // ================================
 // CONSTANTES D'AFFICHAGE
@@ -209,8 +210,16 @@ const Messages = () => {
                     }}
                     whileHover={{ backgroundColor: active ? '#eef3fd' : '#fafbff' }}
                   >
-                    <div style={{ ...styles.convIcon, backgroundColor: statut.bg }}>
-                      {iconeService(conv.demande_type_service)}
+                    <div style={styles.convAvatarWrap}>
+                      <Avatar
+                        photo={user.role === 'artisan' ? conv.client_photo : conv.artisan_photo}
+                        name={autreNom}
+                        size={44}
+                        fontSize={17}
+                      />
+                      <div style={{ ...styles.convIconBadge, backgroundColor: statut.bg }}>
+                        {iconeService(conv.demande_type_service)}
+                      </div>
                     </div>
                     <div style={styles.convPerforation} />
                     <div style={styles.convInfo}>
@@ -244,13 +253,21 @@ const Messages = () => {
           ) : (
             <>
               <div style={styles.chatHeader}>
-                <div
-                  style={{
-                    ...styles.chatIcon,
-                    backgroundColor: infosStatut(conversationActive.demande_statut).bg,
-                  }}
-                >
-                  {iconeService(conversationActive.demande_type_service)}
+                <div style={styles.convAvatarWrap}>
+                  <Avatar
+                    photo={user.role === 'artisan' ? conversationActive.client_photo : conversationActive.artisan_photo}
+                    name={user.role === 'artisan' ? conversationActive.client_nom : conversationActive.artisan_nom}
+                    size={44}
+                    fontSize={17}
+                  />
+                  <div
+                    style={{
+                      ...styles.convIconBadge,
+                      backgroundColor: infosStatut(conversationActive.demande_statut).bg,
+                    }}
+                  >
+                    {iconeService(conversationActive.demande_type_service)}
+                  </div>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <p style={styles.eyebrow}>CHANTIER</p>
@@ -461,6 +478,23 @@ const styles = {
     justifyContent: 'center',
     fontSize: '17px',
     flexShrink: 0,
+  },
+  convAvatarWrap: {
+    position: 'relative',
+    flexShrink: 0,
+  },
+  convIconBadge: {
+    position: 'absolute',
+    bottom: '-2px',
+    right: '-2px',
+    width: '20px',
+    height: '20px',
+    borderRadius: '7px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    border: '2px solid #fff',
   },
   convPerforation: {
     width: '1px',
