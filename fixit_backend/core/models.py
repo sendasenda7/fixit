@@ -186,6 +186,11 @@ class Conversation(models.Model):
 # MODÈLE MESSAGE
 # ================================
 class Message(models.Model):
+    TYPE_CHOICES = [
+        ('texte', 'Texte'),
+        ('localisation', 'Localisation'),
+    ]
+
     conversation = models.ForeignKey(
         Conversation,
         on_delete=models.CASCADE,
@@ -196,7 +201,11 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name='messages_envoyes'
     )
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='texte')
     contenu = models.TextField()
+    # Renseignés uniquement quand type == 'localisation'
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     date_creation = models.DateTimeField(auto_now_add=True)
     lu = models.BooleanField(default=False)
 

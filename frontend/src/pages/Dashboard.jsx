@@ -6,10 +6,22 @@ import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import NotificationBell from '../components/NotificationBell';
+import Modal from '../components/Modal';
+import FormField from '../components/FormField';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
 } from 'recharts';
+
+// ===== ICÔNE PAR TYPE DE SERVICE (une seule source, réutilisée partout) =====
+const SERVICE_ICONS = {
+  plomberie: '🚿',
+  electricite: '⚡',
+  peinture: '🎨',
+  climatisation: '❄️',
+  menuiserie: '🪚',
+};
+const getServiceIcon = (type) => SERVICE_ICONS[type] || '🔨';
 
 // ===== COMPOSANT OFFRES PAR DEMANDE =====
 const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
@@ -39,11 +51,7 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
     <motion.div style={{ ...styles.tableCard, backgroundColor: theme.card, marginBottom: '20px' }}
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.1 }}>
       <h3 style={{ ...styles.chartTitle, color: theme.text, marginBottom: '15px' }}>
-        {demande.type_service === 'plomberie' ? '🚿' :
-         demande.type_service === 'electricite' ? '⚡' :
-         demande.type_service === 'peinture' ? '🎨' :
-         demande.type_service === 'climatisation' ? '❄️' :
-         demande.type_service === 'menuiserie' ? '🪚' : '🔨'} {demande.titre}
+        {getServiceIcon(demande.type_service)} {demande.titre}
         <span style={{ ...styles.statutBadge, backgroundColor: demande.statut === 'en_cours' ? '#fff3e0' : '#e8f5e9', color: demande.statut === 'en_cours' ? '#e65100' : '#2e7d32', marginLeft: '10px' }}>
           {demande.statut === 'en_cours' ? '🔄 En cours' : '🟢 Ouverte'}
         </span>
@@ -115,6 +123,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [darkMode, setDarkMode] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // sidebar mobile (fermée par défaut)
 
   // Évaluations
   const [evalModal, setEvalModal] = useState(null);
@@ -235,6 +244,12 @@ const Dashboard = () => {
     setProfileError('');
     setEditProfileOpen(true);
   };
+
+  // Libère l'URL blob de la preview précédente à chaque changement de photo
+  // (et au démontage) — évite l'accumulation mémoire signalée en revue.
+  useEffect(() => {
+    return () => { if (photoPreview) URL.revokeObjectURL(photoPreview); };
+  }, [photoPreview]);
 
   const choisirPhoto = (e) => {
     const file = e.target.files[0];
@@ -370,7 +385,7 @@ const Dashboard = () => {
 
   const renderDashboard = () => (
     <div>
-      <div style={styles.statsGrid}>
+      <div className="dashboard-stats-grid" style={styles.statsGrid}>
         {[
           { icon: '📋', label: 'Total Demandes', value: demandes.length, color: '#1a73e8', bg: '#e8f4fd' },
           { icon: '🟢', label: 'Ouvertes', value: demandes.filter(d => d.statut === 'ouverte').length, color: '#00c853', bg: '#e8f5e9' },
@@ -393,7 +408,7 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div style={styles.chartsRow}>
+      <div className="dashboard-charts-row" style={styles.chartsRow}>
         <motion.div style={{ ...styles.chartCard, backgroundColor: theme.card }}
           initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <h3 style={{ ...styles.chartTitle, color: theme.text }}>📈 Demandes par mois</h3>
@@ -481,7 +496,7 @@ const Dashboard = () => {
               transition={{ delay: i * 0.08 }} whileHover={{ backgroundColor: '#f8faff', x: 4 }}>
               <div style={styles.demandeRowLeft}>
                 <span style={styles.demandeRowIcon}>
-                  {d.type_service === 'plomberie' ? '🚿' : d.type_service === 'electricite' ? '⚡' : d.type_service === 'peinture' ? '🎨' : '🔨'}
+                  {getServiceIcon(d.type_service)}
                 </span>
                 <div>
                   <p style={{ ...styles.demandeRowTitle, color: theme.text }}>{d.titre}</p>
@@ -527,7 +542,7 @@ const Dashboard = () => {
                 transition={{ delay: i * 0.08 }} whileHover={{ backgroundColor: '#f8faff', x: 4 }}>
                 <div style={styles.demandeRowLeft}>
                   <span style={styles.demandeRowIcon}>
-                    {d.type_service === 'plomberie' ? '🚿' : d.type_service === 'electricite' ? '⚡' : d.type_service === 'peinture' ? '🎨' : '🔨'}
+                    {getServiceIcon(d.type_service)}
                   </span>
                   <div>
                     <p style={{ ...styles.demandeRowTitle, color: theme.text }}>{d.titre}</p>
@@ -578,7 +593,7 @@ const Dashboard = () => {
           </p>
         </div>
       </div>
-      <div style={styles.profileGrid}>
+      <div className="dashboard-profile-grid" style={styles.profileGrid}>
         <motion.div style={{ ...styles.profileCard, backgroundColor: theme.card }} whileHover={{ y: -3 }}>
           <h3 style={{ ...styles.profileCardTitle, color: theme.text }}>👤 Informations personnelles</h3>
           {[
@@ -746,312 +761,252 @@ const Dashboard = () => {
       </AnimatePresence>
 
       {/* MODAL évaluation */}
-      <AnimatePresence>
-        {evalModal && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setEvalModal(null)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 5px' }}>
-                ⭐ Évaluer l'artisan
-              </h2>
-              <p style={{ color: '#888', margin: '0 0 25px', fontSize: '14px' }}>
-                {evalModal.artisan_nom}
-              </p>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '12px' }}>
-                  Note *
-                </label>
-                <StarRating value={evalForm.note} onChange={note => setEvalForm({ ...evalForm, note })} />
-                {evalForm.note > 0 && (
-                  <p style={{ color: '#888', fontSize: '13px', marginTop: '8px' }}>
-                    {['', 'Très mauvais', 'Mauvais', 'Moyen', 'Bien', 'Excellent !'][evalForm.note]}
-                  </p>
-                )}
-              </div>
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>
-                  Commentaire
-                </label>
-                <textarea rows={4} placeholder="Décrivez votre expérience avec cet artisan..."
-                  value={evalForm.commentaire}
-                  onChange={e => setEvalForm({ ...evalForm, commentaire: e.target.value })}
-                  style={{
-                    width: '100%', padding: '12px 16px', borderRadius: '10px',
-                    border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none',
-                    resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit',
-                  }} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <motion.button onClick={() => setEvalModal(null)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={envoyerEvaluation} disabled={evalForm.note === 0 || evalLoading}
-                  whileHover={{ scale: evalForm.note === 0 ? 1 : 1.03 }}
-                  style={{
-                    flex: 2, padding: '12px',
-                    backgroundColor: evalForm.note === 0 ? '#ccc' : '#ff9800',
-                    color: '#fff', border: 'none', borderRadius: '10px',
-                    fontSize: '14px', fontWeight: '700',
-                    cursor: evalForm.note === 0 ? 'not-allowed' : 'pointer',
-                  }}>
-                  {evalLoading ? '⏳ Envoi...' : '🚀 Envoyer l\'évaluation'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Modal open={!!evalModal} onClose={() => setEvalModal(null)} theme={theme}
+        title="⭐ Évaluer l'artisan">
+        <p style={{ color: theme.subtext, margin: '-15px 0 25px', fontSize: '14px' }}>
+          {evalModal?.artisan_nom}
+        </p>
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '12px', color: theme.text }}>
+            Note *
+          </label>
+          <StarRating value={evalForm.note} onChange={note => setEvalForm({ ...evalForm, note })} />
+          {evalForm.note > 0 && (
+            <p style={{ color: theme.subtext, fontSize: '13px', marginTop: '8px' }}>
+              {['', 'Très mauvais', 'Mauvais', 'Moyen', 'Bien', 'Excellent !'][evalForm.note]}
+            </p>
+          )}
+        </div>
+        <div style={{ marginBottom: '20px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px', color: theme.text }}>
+            Commentaire
+          </label>
+          <textarea rows={4} placeholder="Décrivez votre expérience avec cet artisan..."
+            value={evalForm.commentaire}
+            onChange={e => setEvalForm({ ...evalForm, commentaire: e.target.value })}
+            style={{
+              width: '100%', padding: '12px 16px', borderRadius: '10px',
+              border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none',
+              resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit',
+              backgroundColor: theme.bg, color: theme.text,
+            }} />
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <motion.button onClick={() => setEvalModal(null)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={envoyerEvaluation} disabled={evalForm.note === 0 || evalLoading}
+            whileHover={{ scale: evalForm.note === 0 ? 1 : 1.03 }}
+            style={{
+              flex: 2, padding: '12px',
+              backgroundColor: evalForm.note === 0 ? '#ccc' : '#ff9800',
+              color: '#fff', border: 'none', borderRadius: '10px',
+              fontSize: '14px', fontWeight: '700',
+              cursor: evalForm.note === 0 ? 'not-allowed' : 'pointer',
+            }}>
+            {evalLoading ? '⏳ Envoi...' : '🚀 Envoyer l\'évaluation'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL édition du profil */}
-      <AnimatePresence>
-        {editProfileOpen && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !profileLoading && setEditProfileOpen(false)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 20px' }}>
-                ✏️ Modifier le profil
-              </h2>
-              {profileError && (
-                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
-                  ❌ {profileError}
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#1a73e8" />
-                <div>
-                  <label htmlFor="dashboard-photo-input" style={{
-                    display: 'inline-block', padding: '8px 16px', backgroundColor: '#f0f0f0',
-                    borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                  }}>
-                    📷 Changer la photo
-                  </label>
-                  <input id="dashboard-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
-                </div>
-              </div>
-              {[
-                { label: 'Email', name: 'email', type: 'email' },
-                { label: 'Téléphone', name: 'telephone', type: 'text' },
-                { label: 'Adresse', name: 'adresse', type: 'text' },
-              ].map(field => (
-                <div key={field.name} style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>{field.label}</label>
-                  <input
-                    type={field.type}
-                    value={profileForm[field.name]}
-                    onChange={e => setProfileForm({ ...profileForm, [field.name]: e.target.value })}
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                <motion.button onClick={() => setEditProfileOpen(false)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={enregistrerProfil} disabled={profileLoading}
-                  whileHover={{ scale: 1.03 }}
-                  style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: profileLoading ? 'not-allowed' : 'pointer' }}>
-                  {profileLoading ? '⏳ Enregistrement...' : '💾 Enregistrer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+      <Modal open={editProfileOpen} onClose={() => !profileLoading && setEditProfileOpen(false)}
+        theme={theme} title="✏️ Modifier le profil">
+        {profileError && (
+          <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+            ❌ {profileError}
+          </div>
         )}
-      </AnimatePresence>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+          <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#1a73e8" />
+          <div>
+            <label htmlFor="dashboard-photo-input" style={{
+              display: 'inline-block', padding: '8px 16px', backgroundColor: theme.border,
+              color: theme.text, borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+            }}>
+              📷 Changer la photo
+            </label>
+            <input id="dashboard-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
+          </div>
+        </div>
+        {[
+          { label: 'Email', name: 'email', type: 'email' },
+          { label: 'Téléphone', name: 'telephone', type: 'text' },
+          { label: 'Adresse', name: 'adresse', type: 'text' },
+        ].map(field => (
+          <FormField
+            key={field.name}
+            label={field.label}
+            type={field.type}
+            theme={theme}
+            value={profileForm[field.name]}
+            onChange={e => setProfileForm({ ...profileForm, [field.name]: e.target.value })}
+          />
+        ))}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+          <motion.button onClick={() => setEditProfileOpen(false)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={enregistrerProfil} disabled={profileLoading}
+            whileHover={{ scale: 1.03 }}
+            style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: profileLoading ? 'not-allowed' : 'pointer' }}>
+            {profileLoading ? '⏳ Enregistrement...' : '💾 Enregistrer'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL changement de mot de passe */}
-      <AnimatePresence>
-        {passwordModalOpen && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !passwordLoading && setPasswordModalOpen(false)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 20px' }}>
-                🔐 Changer le mot de passe
-              </h2>
-              {passwordError && (
-                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
-                  ❌ {passwordError}
-                </div>
-              )}
-              {[
-                { label: 'Ancien mot de passe', name: 'ancien_mot_de_passe' },
-                { label: 'Nouveau mot de passe', name: 'nouveau_mot_de_passe' },
-                { label: 'Confirmer le nouveau mot de passe', name: 'confirmation' },
-              ].map(field => (
-                <div key={field.name} style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>{field.label}</label>
-                  <input
-                    type="password"
-                    value={passwordForm[field.name]}
-                    onChange={e => setPasswordForm({ ...passwordForm, [field.name]: e.target.value })}
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-                  />
-                </div>
-              ))}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
-                <motion.button onClick={() => setPasswordModalOpen(false)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={changerMotDePasse} disabled={passwordLoading}
-                  whileHover={{ scale: 1.03 }}
-                  style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: passwordLoading ? 'not-allowed' : 'pointer' }}>
-                  {passwordLoading ? '⏳ Modification...' : '🔐 Confirmer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+      <Modal open={passwordModalOpen} onClose={() => !passwordLoading && setPasswordModalOpen(false)}
+        theme={theme} title="🔐 Changer le mot de passe">
+        {passwordError && (
+          <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+            ❌ {passwordError}
+          </div>
         )}
-      </AnimatePresence>
+        {[
+          { label: 'Ancien mot de passe', name: 'ancien_mot_de_passe' },
+          { label: 'Nouveau mot de passe', name: 'nouveau_mot_de_passe' },
+          { label: 'Confirmer le nouveau mot de passe', name: 'confirmation' },
+        ].map(field => (
+          <FormField
+            key={field.name}
+            label={field.label}
+            type="password"
+            theme={theme}
+            value={passwordForm[field.name]}
+            onChange={e => setPasswordForm({ ...passwordForm, [field.name]: e.target.value })}
+          />
+        ))}
+        <div style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+          <motion.button onClick={() => setPasswordModalOpen(false)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={changerMotDePasse} disabled={passwordLoading}
+            whileHover={{ scale: 1.03 }}
+            style={{ flex: 2, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: passwordLoading ? 'not-allowed' : 'pointer' }}>
+            {passwordLoading ? '⏳ Modification...' : '🔐 Confirmer'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL suppression de compte */}
-      <AnimatePresence>
-        {deleteModalOpen && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !deleteLoading && setDeleteModalOpen(false)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={{ fontSize: '22px', fontWeight: '800', color: '#d32f2f', margin: '0 0 10px' }}>
-                ⚠️ Supprimer le compte
-              </h2>
-              <p style={{ color: '#888', fontSize: '14px', margin: '0 0 20px' }}>
-                Cette action est irréversible. Toutes vos données seront définitivement supprimées.
-              </p>
-              {deleteError && (
-                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
-                  ❌ {deleteError}
-                </div>
-              )}
-              <div style={{ marginBottom: '20px' }}>
-                <label style={{ fontSize: '14px', fontWeight: '600', display: 'block', marginBottom: '8px' }}>
-                  Confirmez votre mot de passe
-                </label>
-                <input
-                  type="password"
-                  value={deletePassword}
-                  onChange={e => setDeletePassword(e.target.value)}
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <motion.button onClick={() => setDeleteModalOpen(false)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={supprimerCompte} disabled={deleteLoading || !deletePassword}
-                  whileHover={{ scale: 1.03 }}
-                  style={{ flex: 2, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: (deleteLoading || !deletePassword) ? 'not-allowed' : 'pointer' }}>
-                  {deleteLoading ? '⏳ Suppression...' : '🗑️ Supprimer définitivement'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+      <Modal open={deleteModalOpen} onClose={() => !deleteLoading && setDeleteModalOpen(false)}
+        theme={theme} title="⚠️ Supprimer le compte" titleColor="#d32f2f">
+        <p style={{ color: theme.subtext, fontSize: '14px', margin: '0 0 20px' }}>
+          Cette action est irréversible. Toutes vos données seront définitivement supprimées.
+        </p>
+        {deleteError && (
+          <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+            ❌ {deleteError}
+          </div>
         )}
-      </AnimatePresence>
+        <FormField
+          label="Confirmez votre mot de passe" type="password" theme={theme}
+          value={deletePassword} onChange={e => setDeletePassword(e.target.value)}
+        />
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <motion.button onClick={() => setDeleteModalOpen(false)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={supprimerCompte} disabled={deleteLoading || !deletePassword}
+            whileHover={{ scale: 1.03 }}
+            style={{ flex: 2, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: (deleteLoading || !deletePassword) ? 'not-allowed' : 'pointer' }}>
+            {deleteLoading ? '⏳ Suppression...' : '🗑️ Supprimer définitivement'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL confirmation changement de mode */}
-      <AnimatePresence>
-        {confirmArtisanModalOpen && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !artisanModeLoading && setConfirmArtisanModalOpen(false)}>
-            <motion.div style={{ maxWidth: '400px', width: '90%', backgroundColor: '#fff', borderRadius: '20px', padding: '30px', textAlign: 'center' }}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '44px', marginBottom: '10px' }}>{user.role === 'artisan' ? '👤' : '🔧'}</div>
-              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
-                {user.role === 'artisan' ? 'Repasser en mode Client ?' : 'Activer le mode Artisan ?'}
-              </h2>
-              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
-                {user.role === 'artisan'
-                  ? 'Vos offres existantes resteront visibles mais vous ne pourrez plus en soumettre de nouvelles.'
-                  : 'Vous pourrez répondre aux demandes des clients et proposer vos services.'}
-              </p>
+      <Modal open={confirmArtisanModalOpen} onClose={() => !artisanModeLoading && setConfirmArtisanModalOpen(false)}
+        theme={theme} maxWidth="400px" centered>
+        <div style={{ fontSize: '44px', marginBottom: '10px' }}>{user.role === 'artisan' ? '👤' : '🔧'}</div>
+        <h2 style={{ fontSize: '20px', fontWeight: '800', color: theme.text, margin: '0 0 12px' }}>
+          {user.role === 'artisan' ? 'Repasser en mode Client ?' : 'Activer le mode Artisan ?'}
+        </h2>
+        <p style={{ color: theme.subtext, fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+          {user.role === 'artisan'
+            ? 'Vos offres existantes resteront visibles mais vous ne pourrez plus en soumettre de nouvelles.'
+            : 'Vous pourrez répondre aux demandes des clients et proposer vos services.'}
+        </p>
 
-              {user.role !== 'artisan' && (
-                <div style={{ textAlign: 'left', marginBottom: '20px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: '600', color: '#333', display: 'block', marginBottom: '8px' }}>
-                    Ta spécialité *
-                  </label>
-                  <select
-                    value={specialiteChoisie}
-                    onChange={(e) => { setSpecialiteChoisie(e.target.value); setArtisanModeError(''); }}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px' }}
-                  >
-                    <option value="">-- Choisir --</option>
-                    {specialitesDisponibles.map((s) => (
-                      <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {artisanModeError && (
-                <p style={{ color: '#d32f2f', fontSize: '13px', marginBottom: '16px' }}>❌ {artisanModeError}</p>
-              )}
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <motion.button onClick={() => setConfirmArtisanModalOpen(false)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={executerBasculeModeArtisan} disabled={artisanModeLoading} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: artisanModeLoading ? 'not-allowed' : 'pointer' }}>
-                  {artisanModeLoading ? '⏳...' : 'Confirmer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+        {user.role !== 'artisan' && (
+          <div style={{ textAlign: 'left', marginBottom: '20px' }}>
+            <label htmlFor="dashboard-specialite-select" style={{ fontSize: '13px', fontWeight: '600', color: theme.text, display: 'block', marginBottom: '8px' }}>
+              Ta spécialité *
+            </label>
+            <select
+              id="dashboard-specialite-select"
+              value={specialiteChoisie}
+              onChange={(e) => { setSpecialiteChoisie(e.target.value); setArtisanModeError(''); }}
+              style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: '2px solid #e0e0e0', fontSize: '14px', backgroundColor: theme.bg, color: theme.text }}
+            >
+              <option value="">-- Choisir --</option>
+              {specialitesDisponibles.map((s) => (
+                <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+              ))}
+            </select>
+          </div>
         )}
-      </AnimatePresence>
+
+        {artisanModeError && (
+          <p style={{ color: '#d32f2f', fontSize: '13px', marginBottom: '16px' }}>❌ {artisanModeError}</p>
+        )}
+
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <motion.button onClick={() => setConfirmArtisanModalOpen(false)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={executerBasculeModeArtisan} disabled={artisanModeLoading} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: artisanModeLoading ? 'not-allowed' : 'pointer' }}>
+            {artisanModeLoading ? '⏳...' : 'Confirmer'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL confirmation suppression de demande */}
-      <AnimatePresence>
-        {deleteDemandeModal && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !deleteDemandeLoading && setDeleteDemandeModal(null)}>
-            <motion.div style={{ maxWidth: '400px', width: '90%', backgroundColor: '#fff', borderRadius: '20px', padding: '30px', textAlign: 'center' }}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '44px', marginBottom: '10px' }}>🗑️</div>
-              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
-                Supprimer cette demande ?
-              </h2>
-              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
-                « {deleteDemandeModal.titre} » sera définitivement supprimée. Cette action est irréversible.
-              </p>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <motion.button onClick={() => setDeleteDemandeModal(null)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={confirmerSuppressionDemande} disabled={deleteDemandeLoading} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: deleteDemandeLoading ? 'not-allowed' : 'pointer' }}>
-                  {deleteDemandeLoading ? '⏳...' : '🗑️ Supprimer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Modal open={!!deleteDemandeModal} onClose={() => !deleteDemandeLoading && setDeleteDemandeModal(null)}
+        theme={theme} maxWidth="400px" centered>
+        <div style={{ fontSize: '44px', marginBottom: '10px' }}>🗑️</div>
+        <h2 style={{ fontSize: '20px', fontWeight: '800', color: theme.text, margin: '0 0 12px' }}>
+          Supprimer cette demande ?
+        </h2>
+        <p style={{ color: theme.subtext, fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+          « {deleteDemandeModal?.titre} » sera définitivement supprimée. Cette action est irréversible.
+        </p>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <motion.button onClick={() => setDeleteDemandeModal(null)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: theme.border, color: theme.text, border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={confirmerSuppressionDemande} disabled={deleteDemandeLoading} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: deleteDemandeLoading ? 'not-allowed' : 'pointer' }}>
+            {deleteDemandeLoading ? '⏳...' : '🗑️ Supprimer'}
+          </motion.button>
+        </div>
+      </Modal>
 
       <div style={{ ...styles.container, backgroundColor: theme.bg }}>
-        <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
+
+        {/* Overlay mobile : cliquer en dehors de la sidebar la referme */}
+        <AnimatePresence>
+          {sidebarOpen && (
+            <motion.div
+              className="dashboard-sidebar-overlay"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+
         {/* SIDEBAR */}
-        <motion.div style={{ ...styles.sidebar, backgroundColor: theme.sidebar }}
+        <motion.div
+          className={`dashboard-sidebar${sidebarOpen ? ' dashboard-sidebar--open' : ''}`}
+          style={{ ...styles.sidebar, backgroundColor: theme.sidebar }}
           initial={{ x: -80, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ duration: 0.5 }}>
           <div style={styles.sidebarLogo}>
             <span style={{ color: '#fff', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>Fix</span>
@@ -1068,7 +1023,11 @@ const Dashboard = () => {
             {menuItems.map((item) => (
               <motion.div key={item.id}
                 style={{ ...styles.menuItem, ...(activeMenu === item.id ? styles.menuItemActive : {}) }}
-                onClick={() => item.id === 'messages' ? navigate('/messages') : setActiveMenu(item.id)}
+                onClick={() => {
+                  if (item.id === 'messages') navigate('/messages');
+                  else setActiveMenu(item.id);
+                  setSidebarOpen(false); // referme le menu sur mobile après un choix
+                }}
                 whileHover={{ x: 5 }} whileTap={{ scale: 0.97 }}>
                 <span style={styles.menuIcon}>{item.icon}</span>
                 <span>{item.label}</span>
@@ -1082,22 +1041,34 @@ const Dashboard = () => {
         </motion.div>
 
         {/* MAIN */}
-        <div style={{ ...styles.main, backgroundColor: theme.bg }}>
+        <div className="dashboard-main" style={{ ...styles.main, backgroundColor: theme.bg }}>
           <motion.div style={styles.header} initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-            <div>
-              <p style={{ ...styles.eyebrow, color: darkMode ? '#6b7590' : '#9aa3b8' }}>ESPACE CLIENT</p>
-              <h1 style={{ ...styles.headerTitle, color: theme.text }}>
-                {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
-                {activeMenu === 'demandes' && 'Mes demandes'}
-                {activeMenu === 'offres' && 'Mes offres'}
-                {activeMenu === 'profil' && 'Mon profil'}
-                {activeMenu === 'parametres' && 'Paramètres'}
-              </h1>
-              <p style={{ ...styles.headerSubtitle, color: theme.subtext }}>
-                {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
-                {activeMenu === 'profil' && 'Gérez vos informations personnelles'}
-                {activeMenu === 'parametres' && 'Personnalisez votre expérience'}
-              </p>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <button
+                type="button"
+                className="dashboard-sidebar-toggle"
+                aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+                aria-expanded={sidebarOpen}
+                onClick={() => setSidebarOpen((open) => !open)}
+                style={{ color: theme.text }}
+              >
+                ☰
+              </button>
+              <div>
+                <p style={{ ...styles.eyebrow, color: darkMode ? '#6b7590' : '#9aa3b8' }}>ESPACE CLIENT</p>
+                <h1 style={{ ...styles.headerTitle, color: theme.text }}>
+                  {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
+                  {activeMenu === 'demandes' && 'Mes demandes'}
+                  {activeMenu === 'offres' && 'Mes offres'}
+                  {activeMenu === 'profil' && 'Mon profil'}
+                  {activeMenu === 'parametres' && 'Paramètres'}
+                </h1>
+                <p style={{ ...styles.headerSubtitle, color: theme.subtext }}>
+                  {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
+                  {activeMenu === 'profil' && 'Gérez vos informations personnelles'}
+                  {activeMenu === 'parametres' && 'Personnalisez votre expérience'}
+                </p>
+              </div>
             </div>
             <NotificationBell color={theme.text} />
           </motion.div>
@@ -1204,8 +1175,6 @@ const styles = {
   toggle: { width: '46px', height: '24px', borderRadius: '12px', cursor: 'pointer', position: 'relative', display: 'flex', alignItems: 'center' },
   toggleKnob: { width: '20px', height: '20px', borderRadius: '50%', backgroundColor: '#fff', position: 'absolute', left: '2px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' },
   settingBtn: { padding: '8px 18px', backgroundColor: '#1a73e8', color: '#fff', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' },
-  modalOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 },
-  modalBox: { backgroundColor: '#fff', borderRadius: '20px', padding: '40px', width: '480px', maxWidth: '90vw' },
   toast: { position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', backgroundColor: '#ff9800', color: '#fff', padding: '14px 28px', borderRadius: '30px', fontWeight: '700', fontSize: '15px', zIndex: 2000, boxShadow: '0 8px 25px rgba(255,152,0,0.4)' },
 };
 

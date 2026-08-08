@@ -521,15 +521,39 @@ def messages_list(request, conversation_id):
         messages = conversation.messages.all()
         return Response(MessageSerializer(messages, many=True).data)
 
-    contenu = request.data.get('contenu', '').strip()
-    if not contenu:
-        return Response({'error': 'Le message ne peut pas être vide'}, status=status.HTTP_400_BAD_REQUEST)
+    type_message = request.data.get('type', 'texte')
 
-    message = Message.objects.create(
-        conversation=conversation,
-        expediteur=request.user,
-        contenu=contenu
-    )
+    if type_message == 'localisation':
+        try:
+            latitude = float(request.data.get('latitude'))
+            longitude = float(request.data.get('longitude'))
+        except (TypeError, ValueError):
+            return Response({'error': 'Coordonnées invalides'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if not (-90 <= latitude <= 90) or not (-180 <= longitude <= 180):
+            return Response({'error': 'Coordonnées hors limites'}, status=status.HTTP_400_BAD_REQUEST)
+
+        message = Message.objects.create(
+            conversation=conversation,
+            expediteur=request.user,
+            type='localisation',
+            # Texte de repli pour les notifications / anciens clients qui ne
+            # savent pas encore afficher une carte.
+            contenu='📍 Position partagée',
+            latitude=latitude,
+            longitude=longitude,
+        )
+    else:
+        contenu = request.data.get('contenu', '').strip()
+        if not contenu:
+            return Response({'error': 'Le message ne peut pas être vide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        message = Message.objects.create(
+            conversation=conversation,
+            expediteur=request.user,
+            type='texte',
+            contenu=contenu
+        )
 
     destinataire = conversation.demande.client if request.user == conversation.artisan else conversation.artisan
     Notification.objects.create(

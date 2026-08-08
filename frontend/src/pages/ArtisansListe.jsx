@@ -25,6 +25,7 @@ const ArtisansListe = () => {
   const { user } = useAuth();
   const [artisans, setArtisans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [erreur, setErreur] = useState('');
   const [specialite, setSpecialite] = useState(location.state?.type_service || '');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
@@ -38,6 +39,7 @@ const ArtisansListe = () => {
 
   const fetchArtisans = async (pageToLoad = 1) => {
     setLoading(true);
+    setErreur('');
     try {
       const params = new URLSearchParams();
       if (specialite) params.append('specialite', specialite);
@@ -48,6 +50,8 @@ const ArtisansListe = () => {
       setCount(res.data.count ?? (res.data.results ?? res.data).length);
     } catch (err) {
       console.error(err);
+      setArtisans([]);
+      setErreur("Impossible de charger les artisans pour le moment. Réessaie dans un instant.");
     } finally {
       setLoading(false);
     }
@@ -69,7 +73,6 @@ const ArtisansListe = () => {
 
   return (
     <div style={styles.page}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
       <Navbar />
 
       <div style={styles.hero}>
@@ -112,6 +115,18 @@ const ArtisansListe = () => {
       <div style={styles.grid}>
         {loading ? (
           <p style={{ textAlign: 'center', color: '#888', gridColumn: '1 / -1' }}>Chargement…</p>
+        ) : erreur ? (
+          <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '60px 0' }}>
+            <p style={{ fontSize: '40px', margin: 0 }}>⚠️</p>
+            <p style={{ color: '#d32f2f' }}>{erreur}</p>
+            <motion.button
+              onClick={() => fetchArtisans(page)}
+              whileHover={{ scale: 1.03 }}
+              style={{ marginTop: '10px', border: 'none', backgroundColor: '#1a73e8', color: '#fff', padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer' }}
+            >
+              Réessayer
+            </motion.button>
+          </div>
         ) : artisans.length === 0 ? (
           <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '60px 0' }}>
             <p style={{ fontSize: '40px', margin: 0 }}>🔍</p>
@@ -148,6 +163,9 @@ const ArtisansListe = () => {
                 >
                   Publier une demande
                 </motion.button>
+                <p style={styles.cardHint}>
+                  Visible par tous les artisans en {spec ? spec.label.toLowerCase() : 'ce domaine'}
+                </p>
               </motion.div>
             );
           })
@@ -198,12 +216,6 @@ const styles = {
     backgroundColor: '#fff', borderRadius: '18px', padding: '26px 24px',
     textAlign: 'center', boxShadow: '0 4px 24px rgba(20,30,60,0.08)',
   },
-  cardAvatar: {
-    width: '64px', height: '64px', borderRadius: '50%', margin: '0 auto 14px',
-    background: 'linear-gradient(135deg, #1a73e8, #00c853)', color: '#fff',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY,
-  },
   cardName: { fontFamily: FONT_DISPLAY, fontSize: '17px', fontWeight: '700', margin: '0 0 4px', color: '#1a1a2e' },
   cardSpecialite: { fontSize: '13px', color: '#1a73e8', fontWeight: '600', margin: '0 0 4px' },
   cardAdresse: { fontSize: '13px', color: '#8a90a3', margin: 0 },
@@ -214,6 +226,9 @@ const styles = {
   contactBtn: {
     width: '100%', border: 'none', backgroundColor: '#1a73e8', color: '#fff',
     padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+  },
+  cardHint: {
+    fontSize: '11px', color: '#a8adba', margin: '8px 0 0',
   },
 };
 

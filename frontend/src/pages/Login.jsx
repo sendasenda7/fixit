@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import artisanImg from '../assets/artisan.png';
 import { useAuth } from '../context/AuthContext';
+import AuthLayout from '../components/AuthLayout';
+
+const FIELDS = [
+  { label: "Nom d'utilisateur", name: 'username', type: 'text', placeholder: 'Entrez votre nom', autoComplete: 'username' },
+  { label: 'Mot de passe', name: 'password', type: 'password', placeholder: 'Entrez votre mot de passe', autoComplete: 'current-password' },
+];
 
 const Login = () => {
   const { login } = useAuth();
@@ -15,257 +20,103 @@ const Login = () => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
-  setError('');
-  try {
-    await login(formData.username, formData.password); // ← remplace l'axios.post
-    navigate('/dashboard');
-  } catch (err) {
-    if (err.response?.status === 429) {
-      setError("Trop de tentatives. Merci de patienter avant de réessayer.");
-    } else {
-      setError('Identifiants incorrects. Réessayez !');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.username.trim() || !formData.password) {
+      setError('Merci de renseigner votre nom d\'utilisateur et votre mot de passe.');
+      return;
     }
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    setError('');
+    try {
+      await login(formData.username, formData.password);
+      navigate('/dashboard');
+    } catch (err) {
+      if (err.response?.status === 429) {
+        setError('Trop de tentatives. Merci de patienter avant de réessayer.');
+      } else {
+        setError('Identifiants incorrects. Réessayez !');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div style={styles.container}>
-
-      {/* ===== CÔTÉ GAUCHE ===== */}
+    <AuthLayout
+      accentColor="#1a73e8"
+      accentColorDark="#0d47a1"
+      title="Bienvenue sur FixIt !"
+      description="Trouvez le meilleur artisan près de chez vous en quelques clics."
+      features={['✅ Artisans vérifiés', '⚡ Réponse rapide', '💰 Meilleur prix', '🛡️ Garantie qualité']}
+    >
       <motion.div
-        style={styles.leftSide}
-        initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.7 }}
+        style={styles.formBox}
+        initial={{ y: 30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.3, duration: 0.6 }}
       >
-        {/* Image de fond animée */}
-        <motion.div
-          style={styles.bgImage}
-          animate={{ scale: [1, 1.05, 1] }}
-          transition={{ repeat: Infinity, duration: 8, ease: 'easeInOut' }}
-        />
+        <h2 style={styles.formTitle}>Se connecter</h2>
+        <p style={styles.formSubtitle}>
+          Pas encore de compte ?{' '}
+          <Link to="/register" style={styles.formLink}>S'inscrire</Link>
+        </p>
 
-        {/* Overlay dégradé */}
-        <div style={styles.overlay} />
-
-        {/* Contenu en haut à gauche */}
-        <div style={styles.leftContent}>
-
-          {/* Logo */}
+        {error && (
           <motion.div
-            style={styles.logoBox}
-            initial={{ opacity: 0, y: -20 }}
+            role="alert"
+            aria-live="polite"
+            style={styles.errorBox}
+            initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
           >
-            <span style={{ color: '#fff', fontSize: '36px', fontWeight: '800' }}>Fix</span>
-            <span style={{ color: '#00c853', fontSize: '36px', fontWeight: '800' }}>It</span>
+            ❌ {error}
           </motion.div>
+        )}
 
-          {/* Texte principal */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <h2 style={styles.leftTitle}>Bienvenue sur FixIt !</h2>
-            <p style={styles.leftDesc}>
-              Trouvez le meilleur artisan près de chez vous en quelques clics.
-            </p>
-          </motion.div>
-
-          {/* Features */}
-          <div style={styles.features}>
-            {[
-              '✅ Artisans vérifiés',
-              '⚡ Réponse rapide',
-              '💰 Meilleur prix',
-              '🛡️ Garantie qualité',
-            ].map((f, i) => (
-              <motion.div
-                key={f}
-                style={styles.featureItem}
-                initial={{ x: -30, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                transition={{ delay: 0.6 + i * 0.1 }}
-              >
-                {f}
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Badge flottant */}
-          <motion.div
-            style={styles.badge}
-            animate={{ y: [0, -8, 0] }}
-            transition={{ repeat: Infinity, duration: 2.5 }}
-          >
-            ⭐ 4.9/5 – Noté par 2000+ clients
-          </motion.div>
-
-        </div>
-      </motion.div>
-
-      {/* ===== CÔTÉ DROIT ===== */}
-      <motion.div
-        style={styles.rightSide}
-        initial={{ x: 100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.7 }}
-      >
-        <motion.div
-          style={styles.formBox}
-          initial={{ y: 30, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.6 }}
-        >
-          <h2 style={styles.formTitle}>Se connecter</h2>
-          <p style={styles.formSubtitle}>
-            Pas encore de compte ?{' '}
-            <Link to="/register" style={styles.formLink}>S'inscrire</Link>
-          </p>
-
-          {error && (
+        <form style={styles.form} onSubmit={handleSubmit} noValidate>
+          {FIELDS.map((field, i) => (
             <motion.div
-              style={styles.errorBox}
-              initial={{ opacity: 0, y: -10 }}
+              key={field.name}
+              style={styles.inputGroup}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.4 + i * 0.1 }}
             >
-              ❌ {error}
+              <label htmlFor={`login-${field.name}`} style={styles.label}>{field.label}</label>
+              <motion.input
+                id={`login-${field.name}`}
+                type={field.type}
+                name={field.name}
+                placeholder={field.placeholder}
+                autoComplete={field.autoComplete}
+                value={formData[field.name]}
+                onChange={handleChange}
+                style={styles.input}
+                whileFocus={{ borderColor: '#1a73e8', scale: 1.01 }}
+              />
             </motion.div>
-          )}
+          ))}
 
-          <form style={styles.form} onSubmit={handleSubmit}>
-            {[
-              { label: "Nom d'utilisateur", name: 'username', type: 'text', placeholder: 'Entrez votre nom' },
-              { label: 'Mot de passe', name: 'password', type: 'password', placeholder: 'Entrez votre mot de passe' },
-            ].map((field, i) => (
-              <motion.div
-                key={field.name}
-                style={styles.inputGroup}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4 + i * 0.1 }}
-              >
-                <label style={styles.label}>{field.label}</label>
-                <motion.input
-                  type={field.type}
-                  name={field.name}
-                  placeholder={field.placeholder}
-                  value={formData[field.name]}
-                  onChange={handleChange}
-                  style={styles.input}
-                  whileFocus={{ borderColor: '#1a73e8', scale: 1.01 }}
-                />
-              </motion.div>
-            ))}
+          <motion.button
+            type="submit"
+            style={loading ? styles.btnDisabled : styles.btn}
+            disabled={loading}
+            whileHover={!loading ? { scale: 1.03, backgroundColor: '#1557b0' } : {}}
+            whileTap={!loading ? { scale: 0.97 } : {}}
+          >
+            {loading ? '⏳ Connexion...' : '🔐 Se connecter'}
+          </motion.button>
+        </form>
 
-            <motion.button
-              type="submit"
-              style={loading ? styles.btnDisabled : styles.btn}
-              disabled={loading}
-              whileHover={!loading ? { scale: 1.03, backgroundColor: '#1557b0' } : {}}
-              whileTap={!loading ? { scale: 0.97 } : {}}
-            >
-              {loading ? '⏳ Connexion...' : '🔐 Se connecter'}
-            </motion.button>
-          </form>
-
-          <Link to="/forgot-password" style={styles.forgotLink}>Mot de passe oublié ?</Link>
-          <Link to="/" style={styles.backLink}>← Retour à l'accueil</Link>
-        </motion.div>
+        <Link to="/forgot-password" style={styles.forgotLink}>Mot de passe oublié ?</Link>
+        <Link to="/" style={styles.backLink}>← Retour à l'accueil</Link>
       </motion.div>
-    </div>
+    </AuthLayout>
   );
 };
 
 const styles = {
-  container: { display: 'flex', minHeight: '100vh' },
-
-  // Côté gauche
-  leftSide: {
-    flex: 1,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: '100vh',
-  },
-bgImage: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `url(${artisanImg})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    zIndex: 0,
-  },
-overlay: {
-    position: 'absolute',
-    inset: 0,
-    background: 'linear-gradient(135deg, rgba(26,115,232,0.82) 0%, rgba(13,71,161,0.88) 100%)',
-    zIndex: 1,
-  },
-  leftContent: {
-    position: 'relative',
-    zIndex: 2,
-    padding: '50px 50px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '25px',
-    height: '100%',
-  },
-  logoBox: { display: 'flex', gap: '2px' },
-  leftTitle: {
-    fontSize: '30px',
-    fontWeight: '800',
-    color: '#fff',
-    marginBottom: '10px',
-  },
-  leftDesc: {
-    fontSize: '15px',
-    color: 'rgba(255,255,255,0.85)',
-    lineHeight: '1.7',
-  },
-  features: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  featureItem: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    backdropFilter: 'blur(10px)',
-    color: '#fff',
-    padding: '10px 16px',
-    borderRadius: '10px',
-    fontSize: '14px',
-    fontWeight: '500',
-    border: '1px solid rgba(255,255,255,0.2)',
-  },
-  badge: {
-    display: 'inline-block',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    backdropFilter: 'blur(10px)',
-    color: '#fff',
-    padding: '10px 20px',
-    borderRadius: '30px',
-    fontSize: '13px',
-    fontWeight: '600',
-    border: '1px solid rgba(255,255,255,0.3)',
-    alignSelf: 'flex-start',
-  },
-
-  // Côté droit
-  rightSide: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8faff',
-    padding: '40px',
-  },
   formBox: {
     backgroundColor: '#fff',
     borderRadius: '20px',

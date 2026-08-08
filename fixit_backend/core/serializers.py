@@ -159,7 +159,7 @@ class MessageSerializer(serializers.ModelSerializer):
         model = Message
         fields = [
             'id', 'conversation', 'expediteur', 'expediteur_nom',
-            'contenu', 'date_creation', 'lu'
+            'type', 'contenu', 'latitude', 'longitude', 'date_creation', 'lu'
         ]
         extra_kwargs = {
             'conversation': {'read_only': True},

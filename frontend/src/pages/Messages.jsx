@@ -57,6 +57,38 @@ const grouperParJour = (messages) => {
   return groupes;
 };
 
+// Affiche une position partagée : mini carte (OpenStreetMap, sans clé API
+// nécessaire) + lien pour l'ouvrir en grand dans Google Maps.
+const LocalisationBulle = ({ latitude, longitude, moi }) => {
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  const delta = 0.006; // zoom approximatif de la mini-carte
+  const bbox = `${lon - delta}%2C${lat - delta}%2C${lon + delta}%2C${lat + delta}`;
+  const embedUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat}%2C${lon}`;
+  const openUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+
+  return (
+    <div style={styles.localisationWrap}>
+      <p style={{ margin: '0 0 8px', fontWeight: 600, fontSize: '13px' }}>📍 Position partagée</p>
+      <iframe
+        title="Aperçu de la position partagée"
+        src={embedUrl}
+        style={styles.localisationMap}
+        loading="lazy"
+        aria-hidden="true"
+      />
+      <a
+        href={openUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ ...styles.localisationLink, color: moi ? '#fff' : '#1a73e8' }}
+      >
+        Ouvrir dans Google Maps →
+      </a>
+    </div>
+  );
+};
+
 const Messages = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
@@ -68,6 +100,7 @@ const Messages = () => {
   const [messages, setMessages] = useState([]);
   const [texte, setTexte] = useState('');
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
+  const [envoiPositionEnCours, setEnvoiPositionEnCours] = useState(false);
   const [erreur, setErreur] = useState('');
 
   const messagesEndRef = useRef(null);
@@ -138,7 +171,7 @@ const Messages = () => {
     setEnvoiEnCours(true);
     setErreur('');
     try {
-      const res = await api.post(`/conversations/${activeId}/messages/`, { contenu });
+      const res = await api.post(`/conversations/${activeId}/messages/`, { type: 'texte', contenu });
       setMessages((prev) => [...prev, res.data]);
       setTexte('');
       chargerConversations();
@@ -147,6 +180,45 @@ const Messages = () => {
     } finally {
       setEnvoiEnCours(false);
     }
+  };
+
+  const partagerPosition = () => {
+    if (!activeId) return;
+    if (!navigator.geolocation) {
+      setErreur("Ton navigateur ne permet pas de partager ta position.");
+      return;
+    }
+
+    setErreur('');
+    setEnvoiPositionEnCours(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const { latitude, longitude } = position.coords;
+          const res = await api.post(`/conversations/${activeId}/messages/`, {
+            type: 'localisation',
+            latitude,
+            longitude,
+          });
+          setMessages((prev) => [...prev, res.data]);
+          chargerConversations();
+        } catch {
+          setErreur("La position n'a pas pu être envoyée — réessaie");
+        } finally {
+          setEnvoiPositionEnCours(false);
+        }
+      },
+      (geoError) => {
+        setEnvoiPositionEnCours(false);
+        if (geoError.code === geoError.PERMISSION_DENIED) {
+          setErreur("Localisation refusée — autorise l'accès à ta position dans les réglages du navigateur pour la partager.");
+        } else {
+          setErreur("Impossible de récupérer ta position pour le moment.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const conversationActive = conversations.find((c) => c.id === activeId);
@@ -316,9 +388,18 @@ const Messages = () => {
                             style={{
                               ...styles.bulle,
                               ...(item.data.expediteur === user.id ? styles.bulleMoi : styles.bulleAutre),
+                              ...(item.data.type === 'localisation' ? styles.bulleLocalisation : {}),
                             }}
                           >
-                            <p style={{ margin: 0 }}>{item.data.contenu}</p>
+                            {item.data.type === 'localisation' ? (
+                              <LocalisationBulle
+                                latitude={item.data.latitude}
+                                longitude={item.data.longitude}
+                                moi={item.data.expediteur === user.id}
+                              />
+                            ) : (
+                              <p style={{ margin: 0 }}>{item.data.contenu}</p>
+                            )}
                             <span style={styles.bulleHeure}>
                               {new Date(item.data.date_creation).toLocaleTimeString('fr-FR', {
                                 hour: '2-digit',
@@ -337,6 +418,22 @@ const Messages = () => {
               {erreur && <p style={styles.erreur}>{erreur}</p>}
 
               <form onSubmit={envoyerMessage} style={styles.form}>
+                <motion.button
+                  type="button"
+                  onClick={partagerPosition}
+                  disabled={envoiPositionEnCours}
+                  aria-label="Partager ma position"
+                  title="Partager ma position"
+                  style={{
+                    ...styles.locationBtn,
+                    opacity: envoiPositionEnCours ? 0.5 : 1,
+                    cursor: envoiPositionEnCours ? 'not-allowed' : 'pointer',
+                  }}
+                  whileHover={!envoiPositionEnCours ? { scale: 1.05 } : {}}
+                  whileTap={!envoiPositionEnCours ? { scale: 0.95 } : {}}
+                >
+                  {envoiPositionEnCours ? '⏳' : '📍'}
+                </motion.button>
                 <input
                   type="text"
                   className="fx-msg-input"
@@ -662,6 +759,28 @@ const styles = {
     marginTop: '4px',
     textAlign: 'right',
   },
+  bulleLocalisation: {
+    maxWidth: '260px',
+    padding: '10px',
+  },
+  localisationWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  localisationMap: {
+    width: '100%',
+    height: '140px',
+    border: 'none',
+    borderRadius: '10px',
+    pointerEvents: 'none', // la mini-carte n'est qu'un aperçu, pas interactive
+  },
+  localisationLink: {
+    display: 'inline-block',
+    marginTop: '8px',
+    fontSize: '12px',
+    fontWeight: 700,
+    textDecoration: 'none',
+  },
   erreur: {
     color: '#e53935',
     fontSize: '13px',
@@ -691,6 +810,19 @@ const styles = {
     backgroundColor: '#1a73e8',
     color: '#fff',
     fontSize: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  locationBtn: {
+    width: '42px',
+    height: '42px',
+    borderRadius: '50%',
+    border: '1px solid #ddd',
+    backgroundColor: '#fff',
+    color: '#1a73e8',
+    fontSize: '17px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',

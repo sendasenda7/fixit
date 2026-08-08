@@ -25,34 +25,47 @@ const Step1 = ({ formData, setFormData, errors }) => (
     {errors.type_service && (
       <p style={styles.errorMsg}>❌ {errors.type_service}</p>
     )}
-    <div style={styles.servicesGrid}>
-      {services.map((service, i) => (
-        <motion.div
-          key={service.id}
-          style={{
-            ...styles.serviceCard,
-            border: formData.type_service === service.id ? '2px solid #1a73e8' : '2px solid #e0e0e0',
-            backgroundColor: formData.type_service === service.id ? '#e8f4fd' : '#fff',
-          }}
-          onClick={() => setFormData({ ...formData, type_service: service.id })}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: i * 0.05 }}
-          whileHover={{ y: -3, boxShadow: '0 8px 25px rgba(0,0,0,0.1)' }}
-          whileTap={{ scale: 0.97 }}
-        >
-          <div style={styles.serviceCardIcon}>{service.icon}</div>
-          <h4 style={styles.serviceCardLabel}>{service.label}</h4>
-          <p style={styles.serviceCardDesc}>{service.desc}</p>
-          {formData.type_service === service.id && (
-            <motion.div
-              style={styles.selectedBadge}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-            >✓</motion.div>
-          )}
-        </motion.div>
-      ))}
+    <div className="demande-services-grid" style={styles.servicesGrid} role="radiogroup" aria-label="Type de service">
+      {services.map((service, i) => {
+        const selected = formData.type_service === service.id;
+        return (
+          <motion.div
+            key={service.id}
+            role="radio"
+            aria-checked={selected}
+            tabIndex={0}
+            style={{
+              ...styles.serviceCard,
+              border: selected ? '2px solid #1a73e8' : '2px solid #e0e0e0',
+              backgroundColor: selected ? '#e8f4fd' : '#fff',
+            }}
+            onClick={() => setFormData({ ...formData, type_service: service.id })}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setFormData({ ...formData, type_service: service.id });
+              }
+            }}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            whileHover={{ y: -3, boxShadow: '0 8px 25px rgba(0,0,0,0.1)' }}
+            whileTap={{ scale: 0.97 }}
+          >
+            <div style={styles.serviceCardIcon} aria-hidden="true">{service.icon}</div>
+            <h4 style={styles.serviceCardLabel}>{service.label}</h4>
+            <p style={styles.serviceCardDesc}>{service.desc}</p>
+            {selected && (
+              <motion.div
+                style={styles.selectedBadge}
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                aria-hidden="true"
+              >✓</motion.div>
+            )}
+          </motion.div>
+        );
+      })}
     </div>
   </motion.div>
 );
@@ -68,8 +81,9 @@ const Step2 = ({ formData, setFormData, errors }) => (
     <p style={styles.stepDesc}>Plus c'est détaillé, meilleures seront les offres reçues</p>
 
     <div style={styles.formGroup}>
-      <label style={styles.label}>Titre de la demande *</label>
+      <label htmlFor="demande-titre" style={styles.label}>Titre de la demande *</label>
       <input
+        id="demande-titre"
         type="text"
         name="titre"
         placeholder="ex: Fuite d'eau sous l'évier de cuisine"
@@ -84,8 +98,9 @@ const Step2 = ({ formData, setFormData, errors }) => (
     </div>
 
     <div style={styles.formGroup}>
-      <label style={styles.label}>Description détaillée *</label>
+      <label htmlFor="demande-description" style={styles.label}>Description détaillée *</label>
       <textarea
+        id="demande-description"
         name="description"
         placeholder="Décrivez le problème en détail..."
         value={formData.description}
@@ -121,8 +136,9 @@ const Step3 = ({ formData, setFormData, errors }) => (
     <p style={styles.stepDesc}>Indiquez où vous êtes et combien vous souhaitez dépenser</p>
 
     <div style={styles.formGroup}>
-      <label style={styles.label}>Localisation *</label>
+      <label htmlFor="demande-localisation" style={styles.label}>Localisation *</label>
       <input
+        id="demande-localisation"
         type="text"
         name="localisation"
         placeholder="ex: Tunis, La Marsa, Sfax..."
@@ -137,8 +153,9 @@ const Step3 = ({ formData, setFormData, errors }) => (
     </div>
 
     <div style={styles.formGroup}>
-      <label style={styles.label}>Budget estimé (TND) *</label>
+      <label htmlFor="demande-budget" style={styles.label}>Budget estimé (TND) *</label>
       <input
+        id="demande-budget"
         type="number"
         name="budget"
         min="1"
@@ -182,7 +199,7 @@ const Step3 = ({ formData, setFormData, errors }) => (
     {/* Récapitulatif */}
     <div style={styles.recap}>
       <h4 style={styles.recapTitle}>📋 Récapitulatif</h4>
-      <div style={styles.recapGrid}>
+      <div className="demande-recap-grid" style={styles.recapGrid}>
         {[
           { label: 'Service', value: `${services.find(s => s.id === formData.type_service)?.icon} ${services.find(s => s.id === formData.type_service)?.label}` },
           { label: 'Titre', value: formData.titre || '—' },
@@ -221,11 +238,11 @@ const NouvelleDemande = () => {
     if (step === 1 && !formData.type_service)
       newErrors.type_service = 'Veuillez choisir un service';
     if (step === 2) {
-      if (!formData.titre) newErrors.titre = 'Titre requis';
-      if (!formData.description) newErrors.description = 'Description requise';
+      if (!formData.titre.trim()) newErrors.titre = 'Titre requis';
+      if (!formData.description.trim()) newErrors.description = 'Description requise';
     }
     if (step === 3) {
-      if (!formData.localisation) newErrors.localisation = 'Localisation requise';
+      if (!formData.localisation.trim()) newErrors.localisation = 'Localisation requise';
       if (!formData.budget) newErrors.budget = 'Budget requis';
       else if (Number(formData.budget) <= 0) newErrors.budget = 'Le budget doit être supérieur à 0';
     }
@@ -240,7 +257,12 @@ const handleSubmit = async () => {
   if (!validateStep()) return;
   setLoading(true);
   try {
-    await api.post('/demandes/', formData);
+    await api.post('/demandes/', {
+      ...formData,
+      titre: formData.titre.trim(),
+      description: formData.description.trim(),
+      localisation: formData.localisation.trim(),
+    });
     setSuccess(true);
     setTimeout(() => navigate('/dashboard'), 2500);
   } catch (err) {
@@ -285,6 +307,7 @@ const handleSubmit = async () => {
     <div style={styles.page}>
       {/* Header */}
       <motion.div
+        className="demande-header"
         style={styles.pageHeader}
         initial={{ y: -30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -302,8 +325,9 @@ const handleSubmit = async () => {
         </div>
       </motion.div>
 
-      <div style={styles.formContainer}>
+      <div className="demande-container" style={styles.formContainer}>
         <motion.div
+          className="demande-card"
           style={styles.formCard}
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -338,22 +362,24 @@ const handleSubmit = async () => {
                   {s === 1 ? 'Service' : s === 2 ? 'Détails' : 'Budget'}
                 </p>
                 {s < 3 && (
-                  <div style={{
-                    ...styles.progressLine,
-                    backgroundColor: s < step ? '#1a73e8' : '#e0e0e0',
-                  }} />
+                  <div
+                    className="demande-progress-line"
+                    style={{
+                      ...styles.progressLine,
+                      backgroundColor: s < step ? '#1a73e8' : '#e0e0e0',
+                    }}
+                  />
                 )}
               </div>
             ))}
           </div>
 
-          {/* Steps */}
+          {/* Steps — chaque Step est directement l'enfant d'AnimatePresence
+              pour que ses animations d'entrée/sortie (exit) fonctionnent réellement */}
           <AnimatePresence mode="wait">
-            <div key={step}>
-              {step === 1 && <Step1 formData={formData} setFormData={setFormData} errors={errors} />}
-              {step === 2 && <Step2 formData={formData} setFormData={setFormData} errors={errors} />}
-              {step === 3 && <Step3 formData={formData} setFormData={setFormData} errors={errors} />}
-            </div>
+            {step === 1 && <Step1 key="step1" formData={formData} setFormData={setFormData} errors={errors} />}
+            {step === 2 && <Step2 key="step2" formData={formData} setFormData={setFormData} errors={errors} />}
+            {step === 3 && <Step3 key="step3" formData={formData} setFormData={setFormData} errors={errors} />}
           </AnimatePresence>
 
           {/* Boutons */}

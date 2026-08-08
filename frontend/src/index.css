@@ -16,3 +16,258 @@ body {
   --dark: #1a1a2e;
   --text: #555;
 }
+
+/* ==========================================================
+   ACCESSIBILITÉ — état focus visible au clavier
+   (framer-motion whileHover ne réagit qu'à la souris,
+   il faut donc un vrai focus CSS indépendant)
+   ========================================================== */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[role="radio"]:focus-visible,
+[role="switch"]:focus-visible {
+  outline: 3px solid var(--blue);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ==========================================================
+   NAVBAR — responsive
+   ========================================================== */
+.navbar-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 26px;
+  cursor: pointer;
+  color: var(--dark);
+}
+
+@media (max-width: 860px) {
+  .navbar {
+    padding: 15px 20px !important;
+  }
+
+  .navbar-toggle {
+    display: block;
+  }
+
+  .navbar-links {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    flex-direction: column !important;
+    background: #fff;
+    padding: 20px !important;
+    gap: 18px !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    display: none !important;
+  }
+
+  .navbar-links--open {
+    display: flex !important;
+  }
+
+  .navbar-buttons {
+    gap: 8px !important;
+  }
+
+  .navbar-buttons a,
+  .navbar-buttons button {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* ==========================================================
+   LANDING PAGE — responsive
+   ========================================================== */
+@media (max-width: 900px) {
+  .hero {
+    flex-direction: column !important;
+    padding: 50px 24px !important;
+    text-align: center;
+    min-height: auto !important;
+  }
+
+  .hero-left {
+    max-width: 100% !important;
+  }
+
+  .hero-title {
+    font-size: 34px !important;
+  }
+
+  .search-bar {
+    flex-direction: column !important;
+    border-radius: 20px !important;
+  }
+
+  .stats {
+    justify-content: center !important;
+  }
+
+  .hero-image-box {
+    width: 240px !important;
+    height: 240px !important;
+    margin-top: 40px;
+  }
+
+  .how-section,
+  .services-section,
+  .avantages-section,
+  .cta-section {
+    padding: 60px 24px !important;
+  }
+
+  .avantages-section {
+    flex-direction: column !important;
+  }
+
+  .steps {
+    flex-direction: column !important;
+    align-items: center;
+  }
+
+  .step-card {
+    max-width: 100% !important;
+    width: 100%;
+  }
+
+  .footer-content {
+    flex-direction: column !important;
+    gap: 30px !important;
+  }
+
+  .footer-bottom {
+    flex-direction: column !important;
+    gap: 8px;
+    text-align: center;
+  }
+}
+
+/* ==========================================================
+   AUTH LAYOUT (Login / Register) — responsive
+   ========================================================== */
+@media (max-width: 860px) {
+  .auth-container {
+    flex-direction: column !important;
+  }
+
+  /* Le panneau gauche (image + arguments) prend trop de place sur mobile :
+     on le réduit à un simple bandeau plutôt que de le masquer complètement,
+     pour garder un minimum d'identité visuelle sans pousser le formulaire hors écran. */
+  .auth-left {
+    min-height: auto !important;
+    padding: 30px 24px !important;
+  }
+
+  .auth-left > div {
+    padding: 0 !important;
+    gap: 14px !important;
+  }
+
+  .auth-right {
+    padding: 24px !important;
+  }
+}
+
+/* ==========================================================
+   DASHBOARD (client) — sidebar responsive
+   ========================================================== */
+.dashboard-sidebar-toggle {
+  display: none;
+}
+
+.dashboard-sidebar-overlay {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .dashboard-sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  /* La sidebar reste montée dans le DOM (transitions plus fluides,
+     état préservé) mais coulisse hors écran par défaut. */
+  .dashboard-sidebar {
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s ease !important;
+    z-index: 2000 !important;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+  }
+
+  .dashboard-sidebar--open {
+    transform: translateX(0) !important;
+  }
+
+  .dashboard-main {
+    margin-left: 0 !important;
+    padding: 20px !important;
+  }
+
+  .dashboard-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1900;
+  }
+
+  .dashboard-stats-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-charts-row,
+  .dashboard-profile-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .dashboard-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ==========================================================
+   NOUVELLE DEMANDE — responsive
+   ========================================================== */
+@media (max-width: 640px) {
+  .demande-header {
+    padding: 16px 20px !important;
+  }
+
+  .demande-container {
+    margin: 20px auto !important;
+    padding: 0 12px !important;
+  }
+
+  .demande-card {
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
+  }
+
+  .demande-services-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .demande-recap-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .demande-progress-line {
+    width: 60px !important;
+  }
+}

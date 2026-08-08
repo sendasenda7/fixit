@@ -8,6 +8,8 @@ import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import Pagination from '../components/Pagination';
 import NotificationBell from '../components/NotificationBell';
+import Modal from '../components/Modal';
+import FormField from '../components/FormField';
 
 const specialites = [
   { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
@@ -26,6 +28,7 @@ const DashboardArtisan = () => {
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false); // sidebar mobile (fermée par défaut)
   const [filtreService, setFiltreService] = useState('');
   const [offreModal, setOffreModal] = useState(null); // demande sélectionnée
   const [offreForm, setOffreForm] = useState({ prix_propose: '', message: '' });
@@ -156,10 +159,7 @@ const DashboardArtisan = () => {
     }
   };
 
-  const serviceIcon = (type) => ({
-    plomberie: '🚿', electricite: '⚡', peinture: '🎨',
-    reparation: '🔨', climatisation: '❄️', menuiserie: '🪚', autre: '🔧'
-  }[type] || '🔧');
+  const serviceIcon = (type) => specialites.find(s => s.id === type)?.icon || '🔧';
 
   const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
@@ -173,25 +173,19 @@ const DashboardArtisan = () => {
     <div>
       {/* Filtres */}
       <div style={styles.filtres}>
-        {['', 'plomberie', 'electricite', 'peinture', 'reparation', 'climatisation', 'menuiserie', 'autre'].map(s => (
+        {[{ id: '', icon: '🌐', label: 'Tous' }, ...specialites].map(s => (
           <motion.button
-            key={s}
+            key={s.id}
             style={{
               ...styles.filtreBtn,
-              backgroundColor: filtreService === s ? '#1a73e8' : '#f0f0f0',
-              color: filtreService === s ? '#fff' : '#333',
+              backgroundColor: filtreService === s.id ? '#1a73e8' : '#f0f0f0',
+              color: filtreService === s.id ? '#fff' : '#333',
             }}
-            onClick={() => setFiltreService(s)}
+            onClick={() => setFiltreService(s.id)}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            {s === '' ? '🌐 Tous' :
-             s === 'plomberie' ? '🚿 Plomberie' :
-             s === 'electricite' ? '⚡ Électricité' :
-             s === 'peinture' ? '🎨 Peinture' :
-             s === 'reparation' ? '🔨 Réparation' :
-             s === 'climatisation' ? '❄️ Climatisation' :
-             s === 'menuiserie' ? '🪚 Menuiserie' : '🔧 Autre'}
+            {s.icon} {s.label}
           </motion.button>
         ))}
       </div>
@@ -356,6 +350,11 @@ const DashboardArtisan = () => {
     setEditProfileOpen(true);
   };
 
+  // Libère l'URL blob de la preview précédente à chaque changement de photo
+  useEffect(() => {
+    return () => { if (photoPreview) URL.revokeObjectURL(photoPreview); };
+  }, [photoPreview]);
+
   const choisirPhoto = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -440,7 +439,7 @@ const DashboardArtisan = () => {
 
   const renderDashboardArtisan = () => (
     <div>
-      <div style={styles.statsGrid}>
+      <div className="dashboard-stats-grid" style={styles.statsGrid}>
         {[
           { icon: '💼', label: 'Total offres', value: mesOffres.length, color: '#1a73e8', bg: '#e8f4fd' },
           { icon: '✅', label: 'Acceptées', value: mesOffres.filter(o => o.est_acceptee).length, color: '#00c853', bg: '#e8f5e9' },
@@ -463,7 +462,7 @@ const DashboardArtisan = () => {
         ))}
       </div>
 
-      <div style={styles.chartsRow}>
+      <div className="dashboard-charts-row" style={styles.chartsRow}>
         <motion.div style={styles.chartCard}
           initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <h3 style={styles.chartTitle}>📈 Offres par mois</h3>
@@ -664,50 +663,37 @@ const DashboardArtisan = () => {
 
   return (
     <div style={styles.container}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap');`}</style>
       {/* MODAL OFFRE */}
-      <AnimatePresence>
-        {offreModal && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => setOffreModal(null)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={styles.modalTitle}>💼 Soumettre une offre</h2>
-              <p style={styles.modalSubtitle}>{offreModal.titre}</p>
-              {offreError && (
-                <div style={styles.offreErrorBox}>❌ {offreError}</div>
-              )}
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Prix proposé (TND) *</label>
-                <input type="number" min="1" placeholder="ex: 150"
-                  value={offreForm.prix_propose}
-                  onChange={e => setOffreForm({ ...offreForm, prix_propose: e.target.value })}
-                  style={styles.input} />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Message au client *</label>
-                <textarea rows={4} placeholder="Décrivez votre approche, votre expérience..."
-                  value={offreForm.message}
-                  onChange={e => setOffreForm({ ...offreForm, message: e.target.value })}
-                  style={styles.textarea} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <motion.button style={styles.cancelBtn} onClick={() => setOffreModal(null)}
-                  whileHover={{ scale: 1.03 }}>
-                  Annuler
-                </motion.button>
-                <motion.button style={styles.submitBtn}
-                  onClick={soumettreOffre} disabled={offreLoading}
-                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  {offreLoading ? '⏳ Envoi...' : '🚀 Envoyer l\'offre'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+      <Modal open={!!offreModal} onClose={() => setOffreModal(null)}
+        title="💼 Soumettre une offre">
+        <p style={styles.modalSubtitle}>{offreModal?.titre}</p>
+        {offreError && (
+          <div style={styles.offreErrorBox}>❌ {offreError}</div>
         )}
-      </AnimatePresence>
+        <FormField
+          label="Prix proposé (TND) *" type="number" min="1" placeholder="ex: 150"
+          value={offreForm.prix_propose}
+          onChange={e => setOffreForm({ ...offreForm, prix_propose: e.target.value })}
+        />
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Message au client *</label>
+          <textarea rows={4} placeholder="Décrivez votre approche, votre expérience..."
+            value={offreForm.message}
+            onChange={e => setOffreForm({ ...offreForm, message: e.target.value })}
+            style={styles.textarea} />
+        </div>
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          <motion.button style={styles.cancelBtn} onClick={() => setOffreModal(null)}
+            whileHover={{ scale: 1.03 }}>
+            Annuler
+          </motion.button>
+          <motion.button style={styles.submitBtn}
+            onClick={soumettreOffre} disabled={offreLoading}
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            {offreLoading ? '⏳ Envoi...' : '🚀 Envoyer l\'offre'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* TOAST SUCCESS */}
       <AnimatePresence>
@@ -721,106 +707,99 @@ const DashboardArtisan = () => {
       </AnimatePresence>
 
       {/* MODAL édition du profil */}
-      <AnimatePresence>
-        {editProfileOpen && (
-          <motion.div style={styles.modalOverlay}
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !profileLoading && setEditProfileOpen(false)}>
-            <motion.div style={styles.modalBox}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <h2 style={styles.modalTitle}>✏️ Modifier le profil</h2>
-              {profileError && (
-                <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
-                  ❌ {profileError}
-                </div>
-              )}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#00c853" />
-                <div>
-                  <label htmlFor="artisan-photo-input" style={{
-                    display: 'inline-block', padding: '8px 16px', backgroundColor: '#f0f0f0',
-                    borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                  }}>
-                    📷 Changer la photo
-                  </label>
-                  <input id="artisan-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
-                </div>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Spécialité</label>
-                <select
-                  value={profileForm.specialite}
-                  onChange={e => setProfileForm({ ...profileForm, specialite: e.target.value })}
-                  style={styles.input}
-                >
-                  <option value="">— Choisir votre métier —</option>
-                  {specialites.map(s => (
-                    <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Téléphone</label>
-                <input type="text" value={profileForm.telephone}
-                  onChange={e => setProfileForm({ ...profileForm, telephone: e.target.value })}
-                  style={styles.input} />
-              </div>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Adresse</label>
-                <input type="text" value={profileForm.adresse}
-                  onChange={e => setProfileForm({ ...profileForm, adresse: e.target.value })}
-                  style={styles.input} />
-              </div>
-              <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
-                <motion.button style={styles.cancelBtn} onClick={() => setEditProfileOpen(false)}
-                  whileHover={{ scale: 1.03 }}>
-                  Annuler
-                </motion.button>
-                <motion.button style={styles.submitBtn}
-                  onClick={enregistrerProfil} disabled={profileLoading}
-                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  {profileLoading ? '⏳ Enregistrement...' : '💾 Enregistrer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+      <Modal open={editProfileOpen} onClose={() => !profileLoading && setEditProfileOpen(false)}
+        title="✏️ Modifier le profil">
+        {profileError && (
+          <div style={{ backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '12px 16px', borderRadius: '10px', fontSize: '14px', marginBottom: '16px' }}>
+            ❌ {profileError}
+          </div>
         )}
-      </AnimatePresence>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+          <Avatar photo={photoPreview || user.photo} name={user.username} size={64} fontSize={26} background="#00c853" />
+          <div>
+            <label htmlFor="artisan-photo-input" style={{
+              display: 'inline-block', padding: '8px 16px', backgroundColor: '#f0f0f0',
+              borderRadius: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+            }}>
+              📷 Changer la photo
+            </label>
+            <input id="artisan-photo-input" type="file" accept="image/*" onChange={choisirPhoto} style={{ display: 'none' }} />
+          </div>
+        </div>
+        <div style={styles.formGroup}>
+          <label htmlFor="artisan-specialite-select" style={styles.label}>Spécialité</label>
+          <select
+            id="artisan-specialite-select"
+            value={profileForm.specialite}
+            onChange={e => setProfileForm({ ...profileForm, specialite: e.target.value })}
+            style={styles.input}
+          >
+            <option value="">— Choisir votre métier —</option>
+            {specialites.map(s => (
+              <option key={s.id} value={s.id}>{s.icon} {s.label}</option>
+            ))}
+          </select>
+        </div>
+        <FormField
+          label="Téléphone"
+          value={profileForm.telephone}
+          onChange={e => setProfileForm({ ...profileForm, telephone: e.target.value })}
+        />
+        <FormField
+          label="Adresse"
+          value={profileForm.adresse}
+          onChange={e => setProfileForm({ ...profileForm, adresse: e.target.value })}
+        />
+        <div style={{ display: 'flex', gap: '12px', marginTop: '20px' }}>
+          <motion.button style={styles.cancelBtn} onClick={() => setEditProfileOpen(false)}
+            whileHover={{ scale: 1.03 }}>
+            Annuler
+          </motion.button>
+          <motion.button style={styles.submitBtn}
+            onClick={enregistrerProfil} disabled={profileLoading}
+            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+            {profileLoading ? '⏳ Enregistrement...' : '💾 Enregistrer'}
+          </motion.button>
+        </div>
+      </Modal>
 
       {/* MODAL confirmation désactivation mode artisan */}
+      <Modal open={confirmRoleModalOpen} onClose={() => !roleLoading && setConfirmRoleModalOpen(false)}
+        maxWidth="400px" centered>
+        <div style={{ fontSize: '44px', marginBottom: '10px' }}>👤</div>
+        <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
+          Repasser en mode Client ?
+        </h2>
+        <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
+          Vous ne pourrez plus soumettre de nouvelles offres tant que le mode Artisan ne sera pas réactivé.
+        </p>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <motion.button onClick={() => setConfirmRoleModalOpen(false)} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
+            Annuler
+          </motion.button>
+          <motion.button onClick={executerDesactivation} disabled={roleLoading} whileHover={{ scale: 1.03 }}
+            style={{ flex: 1, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: roleLoading ? 'not-allowed' : 'pointer' }}>
+            {roleLoading ? '⏳...' : 'Confirmer'}
+          </motion.button>
+        </div>
+      </Modal>
+
+      {/* Overlay mobile */}
       <AnimatePresence>
-        {confirmRoleModalOpen && (
-          <motion.div style={styles.modalOverlay}
+        {sidebarOpen && (
+          <motion.div
+            className="dashboard-sidebar-overlay"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            onClick={() => !roleLoading && setConfirmRoleModalOpen(false)}>
-            <motion.div style={{ ...styles.modalBox, maxWidth: '400px', textAlign: 'center' }}
-              initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }} onClick={e => e.stopPropagation()}>
-              <div style={{ fontSize: '44px', marginBottom: '10px' }}>👤</div>
-              <h2 style={{ fontSize: '20px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 12px' }}>
-                Repasser en mode Client ?
-              </h2>
-              <p style={{ color: '#888', fontSize: '14px', marginBottom: '24px', lineHeight: '1.6' }}>
-                Vous ne pourrez plus soumettre de nouvelles offres tant que le mode Artisan ne sera pas réactivé.
-              </p>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <motion.button onClick={() => setConfirmRoleModalOpen(false)} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#f0f0f0', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '600', cursor: 'pointer' }}>
-                  Annuler
-                </motion.button>
-                <motion.button onClick={executerDesactivation} disabled={roleLoading} whileHover={{ scale: 1.03 }}
-                  style={{ flex: 1, padding: '12px', backgroundColor: '#ff5252', color: '#fff', border: 'none', borderRadius: '10px', fontSize: '14px', fontWeight: '700', cursor: roleLoading ? 'not-allowed' : 'pointer' }}>
-                  {roleLoading ? '⏳...' : 'Confirmer'}
-                </motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
+            onClick={() => setSidebarOpen(false)}
+          />
         )}
       </AnimatePresence>
 
       {/* SIDEBAR */}
-      <motion.div style={styles.sidebar}
+      <motion.div
+        className={`dashboard-sidebar${sidebarOpen ? ' dashboard-sidebar--open' : ''}`}
+        style={styles.sidebar}
         initial={{ x: -80, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
         <div style={{ display: 'flex', marginBottom: '30px', paddingLeft: '10px' }}>
           <span style={{ color: '#fff', fontSize: '26px', fontWeight: '700', fontFamily: FONT_DISPLAY }}>Fix</span>
@@ -837,7 +816,11 @@ const DashboardArtisan = () => {
           {menuItems.map(item => (
             <motion.div key={item.id}
               style={{ ...styles.menuItem, ...(activeMenu === item.id ? styles.menuItemActive : {}) }}
-              onClick={() => item.id === 'messages' ? navigate('/messages') : setActiveMenu(item.id)}
+              onClick={() => {
+                if (item.id === 'messages') navigate('/messages');
+                else setActiveMenu(item.id);
+                setSidebarOpen(false);
+              }}
               whileHover={{ x: 5 }} whileTap={{ scale: 0.97 }}>
               <span style={{ fontSize: '18px' }}>{item.icon}</span>
               <span>{item.label}</span>
@@ -851,23 +834,34 @@ const DashboardArtisan = () => {
       </motion.div>
 
       {/* MAIN */}
-      <div style={styles.main}>
+      <div className="dashboard-main" style={styles.main}>
         <motion.div style={{ ...styles.header, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
           initial={{ y: -30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-          <div>
-            <p style={styles.eyebrow}>ESPACE ARTISAN</p>
-            <h1 style={styles.headerTitle}>
-              {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
-              {activeMenu === 'demandes' && 'Demandes disponibles'}
-              {activeMenu === 'mes_offres' && 'Mes offres'}
-              {activeMenu === 'profil' && 'Mon profil'}
-            </h1>
-            <p style={styles.headerSubtitle}>
-              {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
-              {activeMenu === 'demandes' && `${demandes.length} demande(s) ouverte(s)`}
-              {activeMenu === 'mes_offres' && `${mesOffres.length} offre(s) soumise(s)`}
-              {activeMenu === 'profil' && totalNotes > 0 && `⭐ ${moyenneNote}/5 sur ${totalNotes} avis`}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <button
+              type="button"
+              className="dashboard-sidebar-toggle"
+              aria-label={sidebarOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+              aria-expanded={sidebarOpen}
+              onClick={() => setSidebarOpen((open) => !open)}
+            >
+              ☰
+            </button>
+            <div>
+              <p style={styles.eyebrow}>ESPACE ARTISAN</p>
+              <h1 style={styles.headerTitle}>
+                {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
+                {activeMenu === 'demandes' && 'Demandes disponibles'}
+                {activeMenu === 'mes_offres' && 'Mes offres'}
+                {activeMenu === 'profil' && 'Mon profil'}
+              </h1>
+              <p style={styles.headerSubtitle}>
+                {activeMenu === 'dashboard' && 'Voici un résumé de votre activité'}
+                {activeMenu === 'demandes' && `${demandes.length} demande(s) ouverte(s)`}
+                {activeMenu === 'mes_offres' && `${mesOffres.length} offre(s) soumise(s)`}
+                {activeMenu === 'profil' && totalNotes > 0 && `⭐ ${moyenneNote}/5 sur ${totalNotes} avis`}
+              </p>
+            </div>
           </div>
           <NotificationBell />
         </motion.div>
@@ -1026,17 +1020,6 @@ const styles = {
     display: 'flex', alignItems: 'center', gap: '12px',
     padding: '12px 0', borderBottom: '1px solid #f0f0f0',
   },
-  modalOverlay: {
-    position: 'fixed', inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    zIndex: 1000,
-  },
-  modalBox: {
-    backgroundColor: '#fff', borderRadius: '20px',
-    padding: '40px', width: '500px', maxWidth: '90vw',
-  },
-  modalTitle: { fontFamily: FONT_DISPLAY, fontSize: '22px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 5px' },
   modalSubtitle: { fontSize: '14px', color: '#8a90a3', margin: '0 0 25px' },
   offreErrorBox: { backgroundColor: '#ffe8e8', color: '#d32f2f', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '16px' },
   formGroup: { marginBottom: '18px' },

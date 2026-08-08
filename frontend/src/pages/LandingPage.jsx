@@ -52,15 +52,29 @@ const AnimatedSection = ({ children, delay = 0 }) => {
 const LandingPage = () => {
   const navigate = useNavigate();
   const [searchText, setSearchText] = useState('');
+  const [searchError, setSearchError] = useState('');
   const [counter, setCounter] = useState({ artisans: 0, clients: 0, satisfaction: 0 });
   const [statsRef, statsInView] = useInView();
 
   const handleSearch = () => {
+    if (!searchText.trim()) {
+      setSearchError('Entrez un type de service pour lancer la recherche.');
+      return;
+    }
     const type_service = matchServiceType(searchText);
+    if (!type_service) {
+      // Aucun type reconnu : on redirige quand même vers la liste complète,
+      // mais on prévient l'utilisateur au lieu de filtrer silencieusement à vide.
+      setSearchError(`Aucun service ne correspond exactement à "${searchText}". Voici tous les artisans disponibles.`);
+    } else {
+      setSearchError('');
+    }
     navigate('/artisans', { state: { type_service } });
   };
 
   // Animation des compteurs
+  // TODO: brancher sur un vrai endpoint (ex: /api/stats/) une fois disponible côté backend.
+  // En attendant, ces chiffres sont indicatifs et ne doivent pas être présentés comme des données réelles en production.
   useEffect(() => {
     if (statsInView) {
       const duration = 2000;
@@ -76,11 +90,12 @@ const LandingPage = () => {
         });
         if (step >= steps) clearInterval(timer);
       }, interval);
+      return () => clearInterval(timer);
     }
   }, [statsInView]);
 
-  // Suggestions de recherche
-  const suggestions = ['Plombier', 'Électricien', 'Peintre', 'Menuisier', 'Climatisation'];
+  // Suggestions de recherche (alignées avec les types reconnus par matchServiceType)
+  const suggestions = ['Plombier', 'Électricien', 'Peintre', 'Menuisier', 'Climatisation', 'Réparation'];
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [placeholder, setPlaceholder] = useState('');
 
@@ -99,6 +114,7 @@ const LandingPage = () => {
       }
     }, 100);
     return () => clearInterval(typing);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [suggestionIndex]);
 
   return (
@@ -106,8 +122,9 @@ const LandingPage = () => {
       <Navbar />
 
       {/* ========== HERO ========== */}
-      <section style={styles.hero}>
+      <section className="hero" style={styles.hero}>
         <motion.div
+          className="hero-left"
           style={styles.heroLeft}
           initial={{ opacity: 0, x: -80 }}
           animate={{ opacity: 1, x: 0 }}
@@ -123,6 +140,7 @@ const LandingPage = () => {
           </motion.p>
 
           <motion.h1
+            className="hero-title"
             style={styles.heroTitle}
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -144,6 +162,7 @@ const LandingPage = () => {
 
           {/* Barre de recherche animée */}
           <motion.div
+            className="search-bar"
             style={styles.searchBar}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -151,13 +170,15 @@ const LandingPage = () => {
           >
             <input
               type="text"
+              aria-label="Rechercher un type d'artisan"
               placeholder={`Rechercher un ${placeholder}...`}
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) => { setSearchText(e.target.value); if (searchError) setSearchError(''); }}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
               style={styles.searchInput}
             />
             <motion.button
+              type="button"
               onClick={handleSearch}
               style={styles.searchBtn}
               whileHover={{ backgroundColor: '#1557b0', scale: 1.05 }}
@@ -166,9 +187,12 @@ const LandingPage = () => {
               🔍 Rechercher
             </motion.button>
           </motion.div>
+          {searchError && (
+            <p role="status" style={styles.searchErrorText}>{searchError}</p>
+          )}
 
           {/* Compteurs animés */}
-          <div ref={statsRef} style={styles.stats}>
+          <div ref={statsRef} className="stats" style={styles.stats}>
             {[
               { num: counter.artisans + '+', label: 'Artisans' },
               { num: counter.clients + '+', label: 'Clients' },
@@ -196,11 +220,12 @@ const LandingPage = () => {
           transition={{ duration: 0.8, ease: 'easeOut' }}
         >
           <motion.div
+            className="hero-image-box"
             style={styles.heroImageBox}
             animate={{ y: [0, -15, 0] }}
             transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
           >
-            <div style={styles.heroEmoji}>👨‍🔧</div>
+            <div style={styles.heroEmoji} aria-hidden="true">👨‍🔧</div>
             <motion.div
               style={styles.heroBubble}
               initial={{ opacity: 0, scale: 0 }}
@@ -230,13 +255,13 @@ const LandingPage = () => {
       </section>
 
       {/* ========== COMMENT ÇA MARCHE ========== */}
-      <section id="comment" style={styles.howSection}>
+      <section id="comment" className="how-section" style={styles.howSection}>
         <AnimatedSection>
           <h2 style={styles.sectionTitle}>Comment ça marche ?</h2>
           <p style={styles.sectionSubtitle}>3 étapes simples pour résoudre vos problèmes</p>
         </AnimatedSection>
 
-        <div style={styles.steps}>
+        <div className="steps" style={styles.steps}>
           {[
             { num: '1', icon: '📝', title: 'Publiez votre demande', desc: 'Décrivez votre problème et votre budget en quelques secondes.' },
             { num: '2', icon: '💼', title: 'Recevez des offres', desc: 'Des artisans qualifiés vous envoient leurs meilleures offres.' },
@@ -244,6 +269,7 @@ const LandingPage = () => {
           ].map((step, i) => (
             <AnimatedSection key={step.num} delay={i * 0.2}>
               <motion.div
+                className="step-card"
                 style={styles.stepCard}
                 whileHover={{ y: -10, boxShadow: '0 20px 40px rgba(26,115,232,0.15)' }}
                 transition={{ type: 'spring', stiffness: 300 }}
@@ -254,7 +280,7 @@ const LandingPage = () => {
                 >
                   {step.num}
                 </motion.div>
-                <div style={styles.stepIcon}>{step.icon}</div>
+                <div style={styles.stepIcon} aria-hidden="true">{step.icon}</div>
                 <h3 style={styles.stepTitle}>{step.title}</h3>
                 <p style={styles.stepDesc}>{step.desc}</p>
               </motion.div>
@@ -264,7 +290,7 @@ const LandingPage = () => {
       </section>
 
       {/* ========== SERVICES ========== */}
-      <section id="services" style={styles.servicesSection}>
+      <section id="services" className="services-section" style={styles.servicesSection}>
         <AnimatedSection>
           <h2 style={styles.sectionTitle}>Nos Services</h2>
           <p style={styles.sectionSubtitle}>Tous les services dont vous avez besoin</p>
@@ -288,6 +314,7 @@ const LandingPage = () => {
               >
                 <motion.div
                   style={styles.serviceIcon}
+                  aria-hidden="true"
                   animate={{ rotate: [0, 5, -5, 0] }}
                   transition={{ repeat: Infinity, duration: 2, delay: i * 0.3 }}
                 >
@@ -301,7 +328,7 @@ const LandingPage = () => {
       </section>
 
       {/* ========== AVANTAGES ========== */}
-      <section id="avantages" style={styles.avantagesSection}>
+      <section id="avantages" className="avantages-section" style={styles.avantagesSection}>
         <AnimatedSection>
           <div style={styles.avantagesLeft}>
             <h2 style={styles.avantagesTitle}>
@@ -311,7 +338,7 @@ const LandingPage = () => {
               FixIt vous connecte avec les meilleurs artisans de votre région,
               rapidement et en toute sécurité.
             </p>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} style={{ display: 'inline-block' }}>
               <Link to="/register" style={styles.avantagesBtn}>
                 Commencer maintenant →
               </Link>
@@ -334,6 +361,7 @@ const LandingPage = () => {
               >
                 <motion.span
                   style={styles.avantageIcon}
+                  aria-hidden="true"
                   whileHover={{ scale: 1.3, rotate: 10 }}
                 >
                   {av.icon}
@@ -350,7 +378,7 @@ const LandingPage = () => {
 
       {/* ========== CTA ========== */}
       <AnimatedSection>
-        <section style={styles.ctaSection}>
+        <section className="cta-section" style={styles.ctaSection}>
           <motion.h2
             style={styles.ctaTitle}
             initial={{ opacity: 0, y: 30 }}
@@ -377,7 +405,7 @@ const LandingPage = () => {
 
       {/* ========== FOOTER ========== */}
       <footer style={styles.footer}>
-        <div style={styles.footerContent}>
+        <div className="footer-content" style={styles.footerContent}>
           <div style={styles.footerCol}>
             <div style={styles.footerLogo}>
               <span style={{ color: '#1a73e8' }}>Fix</span>
@@ -386,16 +414,38 @@ const LandingPage = () => {
             <p style={styles.footerDesc}>
               La plateforme qui connecte clients et artisans qualifiés en Tunisie.
             </p>
+            {/* TODO: remplacer les href par les vraies pages FixIt une fois créées */}
             <div style={styles.footerSocials}>
-              {['📘', '📸', '🐦'].map((s) => (
-                <motion.span
-                  key={s}
-                  style={styles.socialBtn}
-                  whileHover={{ scale: 1.3, y: -3 }}
-                >
-                  {s}
-                </motion.span>
-              ))}
+              <motion.a
+                href="https://facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Suivre FixIt sur Facebook"
+                style={styles.socialBtn}
+                whileHover={{ scale: 1.3, y: -3 }}
+              >
+                📘
+              </motion.a>
+              <motion.a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Suivre FixIt sur Instagram"
+                style={styles.socialBtn}
+                whileHover={{ scale: 1.3, y: -3 }}
+              >
+                📸
+              </motion.a>
+              <motion.a
+                href="https://twitter.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Suivre FixIt sur Twitter"
+                style={styles.socialBtn}
+                whileHover={{ scale: 1.3, y: -3 }}
+              >
+                🐦
+              </motion.a>
             </div>
           </div>
           <div style={styles.footerCol}>
@@ -429,13 +479,14 @@ const LandingPage = () => {
             <h4 style={styles.footerColTitle}>Contact</h4>
             <ul style={styles.footerList}>
               <li>📍 Tunis, Tunisie</li>
-              <li>📞 +216 XX XXX XXX</li>
-              <li>✉️ contact@fixit.tn</li>
+              {/* TODO: remplacer par le vrai numéro avant mise en production */}
+              <li><a href="tel:+216XXXXXXXX" style={styles.footerLink}>📞 +216 XX XXX XXX</a></li>
+              <li><a href="mailto:contact@fixit.tn" style={styles.footerLink}>✉️ contact@fixit.tn</a></li>
               <li>🕐 Lun-Ven : 8h - 18h</li>
             </ul>
           </div>
         </div>
-        <div style={styles.footerBottom}>
+        <div className="footer-bottom" style={styles.footerBottom}>
           <p>© 2026 FixIt – Tous droits réservés</p>
           <p>Fait avec ❤️ en Tunisie</p>
         </div>
@@ -484,7 +535,7 @@ const styles = {
     borderRadius: '50px',
     boxShadow: '0 4px 20px rgba(0,0,0,0.12)',
     overflow: 'hidden',
-    marginBottom: '35px',
+    marginBottom: '10px',
   },
   searchInput: {
     flex: 1,
@@ -501,6 +552,11 @@ const styles = {
     cursor: 'pointer',
     fontSize: '15px',
     fontWeight: '600',
+  },
+  searchErrorText: {
+    color: '#c62828',
+    fontSize: '14px',
+    marginBottom: '25px',
   },
   stats: { display: 'flex', gap: '40px' },
   stat: { display: 'flex', flexDirection: 'column' },
@@ -693,6 +749,7 @@ const styles = {
     display: 'flex',
     gap: '20px',
     justifyContent: 'center',
+    flexWrap: 'wrap',
   },
   ctaBtnPrimary: {
     padding: '16px 35px',
@@ -734,7 +791,7 @@ const styles = {
   },
   footerDesc: {
     fontSize: '14px',
-    color: '#888',
+    color: '#a8a8b8',
     lineHeight: '1.7',
     marginBottom: '20px',
   },
@@ -745,6 +802,7 @@ const styles = {
   socialBtn: {
     fontSize: '22px',
     cursor: 'pointer',
+    textDecoration: 'none',
   },
   footerColTitle: {
     color: '#fff',
@@ -758,7 +816,7 @@ const styles = {
     flexDirection: 'column',
     gap: '10px',
     fontSize: '14px',
-    color: '#888',
+    color: '#a8a8b8',
     cursor: 'pointer',
   },
   footerLink: {

@@ -1,34 +1,52 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Ferme le menu mobile après un clic sur un lien (évite de rester coincé ouvert)
+  const closeMenu = () => setMenuOpen(false);
 
   return (
-    <nav style={styles.nav}>
-      {/* Logo */}
-      <Link to="/" style={styles.logo}>
+    <nav className="navbar" style={styles.nav}>
+      <Link to="/" style={styles.logo} onClick={closeMenu}>
         <span style={styles.logoFix}>Fix</span>
         <span style={styles.logoIt}>It</span>
       </Link>
 
-      {/* Liens navigation */}
-      <ul style={styles.navLinks}>
-        <li><a href="#comment" style={styles.link}>Comment ça marche</a></li>
-        <li><a href="#services" style={styles.link}>Services</a></li>
-        <li><Link to="/artisans" style={styles.link}>Trouver un artisan</Link></li>
-        <li><a href="#avantages" style={styles.link}>Avantages</a></li>
+      <button
+        type="button"
+        className="navbar-toggle"
+        aria-label={menuOpen ? 'Fermer le menu de navigation' : 'Ouvrir le menu de navigation'}
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((open) => !open)}
+      >
+        {menuOpen ? '✕' : '☰'}
+      </button>
+
+      <ul
+        className={`navbar-links${menuOpen ? ' navbar-links--open' : ''}`}
+        style={styles.navLinks}
+      >
+        <li><a href="#comment" style={styles.link} onClick={closeMenu}>Comment ça marche</a></li>
+        <li><a href="#services" style={styles.link} onClick={closeMenu}>Services</a></li>
+        <li><Link to="/artisans" style={styles.link} onClick={closeMenu}>Trouver un artisan</Link></li>
+        <li><a href="#avantages" style={styles.link} onClick={closeMenu}>Avantages</a></li>
       </ul>
 
-      {/* Boutons */}
-      <div style={styles.navButtons}>
+      <div className="navbar-buttons" style={styles.navButtons}>
         {user ? (
           <>
             <NotificationBell />
             <Link to="/dashboard" style={styles.btnLogin}>Tableau de bord</Link>
-            <button onClick={logout} style={{ ...styles.btnRegister, border: 'none', cursor: 'pointer' }}>
+            <button
+              type="button"
+              onClick={logout}
+              style={{ ...styles.btnRegister, border: 'none', cursor: 'pointer' }}
+            >
               Déconnexion
             </button>
           </>
@@ -61,8 +79,8 @@ const styles = {
     cursor: 'pointer',
     textDecoration: 'none',
   },
-  logoFix: { color: '#1a73e8' },
-  logoIt: { color: '#00c853' },
+  logoFix: { color: 'var(--blue)' },
+  logoIt: { color: 'var(--green)' },
   navLinks: {
     display: 'flex',
     listStyle: 'none',
@@ -83,8 +101,8 @@ const styles = {
     textDecoration: 'none',
     padding: '8px 20px',
     borderRadius: '25px',
-    border: '2px solid #1a73e8',
-    color: '#1a73e8',
+    border: '2px solid var(--blue)',
+    color: 'var(--blue)',
     fontWeight: '600',
     fontSize: '14px',
   },
@@ -92,7 +110,7 @@ const styles = {
     textDecoration: 'none',
     padding: '8px 20px',
     borderRadius: '25px',
-    backgroundColor: '#1a73e8',
+    backgroundColor: 'var(--blue)',
     color: '#fff',
     fontWeight: '600',
     fontSize: '14px',
