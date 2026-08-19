@@ -39,6 +39,8 @@ const Pagination = ({ page, totalPages, onChange, accentColor = '#1a1a2e' }) => 
               {showEllipsis && <span style={styles.ellipsis}>…</span>}
               <motion.button
                 onClick={() => onChange(p)}
+                aria-current={p === page ? 'page' : undefined}
+                aria-label={`Page ${p}`}
                 whileHover={p !== page ? { scale: 1.08 } : {}}
                 whileTap={{ scale: 0.95 }}
                 style={{

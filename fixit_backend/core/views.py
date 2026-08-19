@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
+from .throttles import LoginRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -44,7 +44,7 @@ def register(request):
 
 @api_view(['POST'])
 @permission_classes([AllowAny])
-@throttle_classes([ScopedRateThrottle])
+@throttle_classes([LoginRateThrottle])
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
@@ -58,10 +58,6 @@ def login_view(request):
             'user': UserSerializer(user, context={'request': request}).data
         })
     return Response({'error': 'Identifiants incorrects'}, status=status.HTTP_400_BAD_REQUEST)
-
-
-# Limite le nombre de tentatives de connexion (voir DEFAULT_THROTTLE_RATES dans settings.py)
-login_view.cls.throttle_scope = 'login'
 
 
 @api_view(['POST'])
@@ -343,6 +339,18 @@ def offres_list(request):
         return Response({'error': 'Seul un artisan peut soumettre une offre'}, status=status.HTTP_403_FORBIDDEN)
 
     demande_id = request.data.get('demande')
+
+    try:
+        demande_cible = Demande.objects.get(pk=demande_id)
+    except Demande.DoesNotExist:
+        return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if demande_cible.statut != 'ouverte':
+        return Response(
+            {'error': 'Cette demande n\'accepte plus de nouvelles offres.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
     if Offre.objects.filter(demande_id=demande_id, artisan=request.user).exists():
         return Response(
             {'error': 'Vous avez déjà soumis une offre sur cette demande. Modifiez-la plutôt que d’en créer une nouvelle.'},
@@ -365,8 +373,24 @@ def offres_list(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def offres_par_demande(request, demande_id):
-    """Toutes les offres d'une demande spécifique"""
+    """
+    Offres d'une demande spécifique — visibilité restreinte :
+    - le client propriétaire de la demande voit toutes les offres reçues
+    - un artisan ne voit que sa PROPRE offre (jamais celles de ses concurrents)
+    - toute autre personne ne voit rien
+    Avant ce correctif, n'importe quel utilisateur connecté pouvait voir les
+    prix et messages de tous les artisans sur n'importe quelle demande.
+    """
+    try:
+        demande = Demande.objects.get(pk=demande_id)
+    except Demande.DoesNotExist:
+        return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
     offres = Offre.objects.filter(demande_id=demande_id).order_by('-date_creation')
+
+    if demande.client != request.user:
+        offres = offres.filter(artisan=request.user)
+
     return Response(OffreSerializer(offres, many=True).data)
 
 

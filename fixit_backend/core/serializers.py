@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from django.contrib.auth.password_validation import validate_password as validate_password_strength
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
 
 
@@ -18,6 +20,18 @@ class UserSerializer(serializers.ModelSerializer):
             'specialite',
             'photo'
         ]
+
+    def validate(self, data):
+        # La contrainte "il faut choisir une spécialité pour devenir artisan"
+        # n'existait que côté frontend (modal de confirmation) — un appel direct
+        # à l'API pouvait basculer un compte en 'artisan' sans spécialité.
+        role = data.get('role', getattr(self.instance, 'role', None))
+        specialite = data.get('specialite', getattr(self.instance, 'specialite', ''))
+        if role == 'artisan' and not specialite:
+            raise serializers.ValidationError(
+                {'specialite': "Une spécialité est requise pour activer le mode artisan."}
+            )
+        return data
 
 
 # ================================
@@ -62,6 +76,17 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         if value and User.objects.filter(email=value).exists():
             raise serializers.ValidationError('Un compte existe déjà avec cet email.')
+        return value
+
+    def validate_password(self, value):
+        # Applique les mêmes règles (AUTH_PASSWORD_VALIDATORS) que le changement
+        # et la réinitialisation de mot de passe — absentes ici jusqu'à présent,
+        # ce qui permettait de créer un compte avec un mot de passe trivial
+        # en appelant l'API directement (le minLength côté frontend ne protège rien).
+        try:
+            validate_password_strength(value)
+        except DjangoValidationError as e:
+            raise serializers.ValidationError(list(e.messages))
         return value
 
     def create(self, validated_data):

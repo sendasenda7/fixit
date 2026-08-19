@@ -145,9 +145,19 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken', 'x-requested-with',
 ]
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_SECURE = False
+
+# En prod (DEBUG=False), on durcit automatiquement : cookies envoyés uniquement
+# en HTTPS, redirection forcée vers HTTPS, HSTS. En dev (DEBUG=True), ça resterait
+# bloquant puisque le serveur de dev tourne en HTTP simple sur localhost.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
 # Configuration de l'API REST
 from datetime import timedelta
 
@@ -165,7 +175,10 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    # Volontairement court : le token est stocké en localStorage côté frontend
+    # (donc exposé en cas de XSS). Le refresh automatique est déjà géré par
+    # l'intercepteur axios, donc réduire cette durée n'a aucun coût pour l'UX.
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
 
