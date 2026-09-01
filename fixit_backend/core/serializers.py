@@ -2,8 +2,9 @@ from rest_framework import serializers
 from django.contrib.auth.password_validation import validate_password as validate_password_strength
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
-
-
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
+from .geo import haversine_km
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification, FavoriArtisan, FavoriDemande
 # ================================
 # SERIALIZER USER
 # ================================
@@ -18,8 +19,18 @@ class UserSerializer(serializers.ModelSerializer):
             'telephone',
             'adresse',
             'specialite',
-            'photo'
+            'photo',
+            'bio',
+            'competences',
+            'statut_verification',
+            'date_soumission_verification',
+            'motif_rejet',
         ]
+        extra_kwargs = {
+            'statut_verification': {'read_only': True},
+            'date_soumission_verification': {'read_only': True},
+            'motif_rejet': {'read_only': True},
+        }
 
     def validate(self, data):
         # La contrainte "il faut choisir une spécialité pour devenir artisan"
@@ -40,10 +51,12 @@ class UserSerializer(serializers.ModelSerializer):
 class ArtisanPublicSerializer(serializers.ModelSerializer):
     note_moyenne = serializers.SerializerMethodField()
     nb_avis = serializers.SerializerMethodField()
+    est_favori = serializers.SerializerMethodField()
+    est_verifie = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ['id', 'username', 'specialite', 'adresse', 'photo', 'note_moyenne', 'nb_avis']
+        fields = ['id', 'username', 'specialite', 'adresse', 'photo', 'note_moyenne', 'nb_avis', 'est_favori', 'est_verifie']
 
     def get_note_moyenne(self, obj):
         evals = obj.evaluations_recues.all()
@@ -54,6 +67,80 @@ class ArtisanPublicSerializer(serializers.ModelSerializer):
     def get_nb_avis(self, obj):
         return obj.evaluations_recues.count()
 
+    def get_est_verifie(self, obj):
+        return obj.statut_verification == 'verifie'
+
+    def get_est_favori(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated or user.role != 'client':
+            return False
+        return FavoriArtisan.objects.filter(client=user, artisan=obj).exists()
+# ================================
+# SERIALIZER PROFIL ARTISAN (détail public + privé)
+# ================================
+class ArtisanDetailSerializer(ArtisanPublicSerializer):
+    competences_liste = serializers.SerializerMethodField()
+    missions_completees = serializers.SerializerMethodField()
+    taux_reussite = serializers.SerializerMethodField()
+    dernieres_missions = serializers.SerializerMethodField()
+    avis = serializers.SerializerMethodField()
+
+    class Meta(ArtisanPublicSerializer.Meta):
+        fields = ArtisanPublicSerializer.Meta.fields + [
+            'bio', 'competences', 'competences_liste', 'telephone',
+            'missions_completees', 'taux_reussite', 'dernieres_missions', 'avis',
+            'statut_verification', 'date_soumission_verification', 'motif_rejet',
+        ]
+
+    def get_competences_liste(self, obj):
+        if not obj.competences:
+            return []
+        return [c.strip() for c in obj.competences.split(',') if c.strip()]
+
+    def _offres_terminees(self, obj):
+        return Offre.objects.filter(
+            artisan=obj, est_acceptee=True, demande__statut='terminee'
+        ).select_related('demande')
+
+    def get_missions_completees(self, obj):
+        return self._offres_terminees(obj).count()
+
+    def get_taux_reussite(self, obj):
+        # Part des offres acceptées parmi toutes les offres envoyées par l'artisan.
+        total = Offre.objects.filter(artisan=obj).count()
+        if not total:
+            return 0
+        acceptees = Offre.objects.filter(artisan=obj, est_acceptee=True).count()
+        return round(acceptees / total * 100)
+
+    def get_dernieres_missions(self, obj):
+        offres = self._offres_terminees(obj).order_by('-demande__date_creation')[:3]
+        return [
+            {
+                'id': o.demande.id,
+                'titre': o.demande.titre,
+                'localisation': o.demande.localisation,
+                'date': o.demande.date_creation,
+                'type_service': o.demande.type_service,
+            }
+            for o in offres
+        ]
+
+    def get_avis(self, obj):
+        evals = obj.evaluations_recues.select_related('client').order_by('-date_creation')[:5]
+        return [
+            {
+                'id': e.id,
+                'client_nom': e.client.username,
+                'note': e.note,
+                'commentaire': e.commentaire,
+                'date': e.date_creation,
+                'reponse_artisan': e.reponse_artisan,
+                'date_reponse': e.date_reponse,
+            }
+            for e in evals
+        ]
 
 # ================================
 # SERIALIZER INSCRIPTION
@@ -110,17 +197,35 @@ class RegisterSerializer(serializers.ModelSerializer):
 # ================================
 class DemandeSerializer(serializers.ModelSerializer):
     client_nom = serializers.CharField(source='client.username', read_only=True)
+    distance_km = serializers.SerializerMethodField()
+    est_favori = serializers.SerializerMethodField()
 
     class Meta:
         model = Demande
         fields = [
             'id', 'titre', 'description', 'type_service',
             'localisation', 'budget', 'date_creation',
-            'statut', 'client', 'client_nom'
+            'statut', 'client', 'client_nom',
+            'urgent', 'latitude', 'longitude', 'distance_km',
+            'date_debut', 'date_fin', 'est_favori',
         ]
         extra_kwargs = {
             'client': {'read_only': True}  
         }
+
+    def get_distance_km(self, obj):
+        user_lat = self.context.get('user_lat')
+        user_lng = self.context.get('user_lng')
+        if user_lat is None or user_lng is None or obj.latitude is None or obj.longitude is None:
+            return None
+        return round(haversine_km(user_lat, user_lng, obj.latitude, obj.longitude), 1)
+
+    def get_est_favori(self, obj):
+        request = self.context.get('request')
+        user = getattr(request, 'user', None) if request else None
+        if not user or not user.is_authenticated or user.role != 'artisan':
+            return False
+        return FavoriDemande.objects.filter(artisan=user, demande=obj).exists()
 
     def validate_budget(self, value):
         if value <= 0:
@@ -135,13 +240,17 @@ class OffreSerializer(serializers.ModelSerializer):
     demande_titre = serializers.CharField(source='demande.titre', read_only=True)
     demande_statut = serializers.CharField(source='demande.statut', read_only=True)
     demande_type_service = serializers.CharField(source='demande.type_service', read_only=True)
+    demande_date_creation = serializers.DateTimeField(source='demande.date_creation', read_only=True)
+    demande_date_debut = serializers.DateTimeField(source='demande.date_debut', read_only=True)
+    demande_date_fin = serializers.DateTimeField(source='demande.date_fin', read_only=True)
 
     class Meta:
         model = Offre
         fields = [
             'id', 'prix_propose', 'message', 'date_creation',
             'est_acceptee', 'artisan', 'artisan_nom', 'demande',
-            'demande_titre', 'demande_statut', 'demande_type_service'
+            'demande_titre', 'demande_statut', 'demande_type_service',
+            'demande_date_creation', 'demande_date_debut', 'demande_date_fin',
         ]
         extra_kwargs = {
             'artisan': {'read_only': True}  # ← ajoute ça
@@ -167,7 +276,10 @@ class EvaluationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Evaluation
-        fields = ['id', 'note', 'commentaire', 'date_creation', 'client', 'client_nom', 'artisan', 'artisan_nom']
+        fields = [
+            'id', 'note', 'commentaire', 'date_creation', 'client', 'client_nom',
+            'artisan', 'artisan_nom', 'reponse_artisan', 'date_reponse',
+        ]
         extra_kwargs = {
             'client': {'read_only': True},
             'artisan': {'read_only': True},

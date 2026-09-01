@@ -9,9 +9,11 @@
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.16.1",
     "framer-motion": "^12.40.0",
+    "leaflet": "^1.9.4",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-router-dom": "^7.14.2",
+    "react-leaflet": "^5.0.0",
+    "react-router-dom": "^7.18.2",
     "react-scripts": "5.0.1",
     "recharts": "^3.8.1",
     "web-vitals": "^2.1.4"
@@ -27,6 +29,13 @@
       "react-app",
       "react-app/jest"
     ]
+  },
+  "jest": {
+    "moduleNameMapper": {
+      "^react-router-dom$": "<rootDir>/node_modules/react-router-dom/dist/index.js",
+      "^react-router$": "<rootDir>/node_modules/react-router/dist/development/index.js",
+      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js"
+    }
   },
   "browserslist": {
     "production": [

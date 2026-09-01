@@ -7,6 +7,7 @@ import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import Pagination from '../components/Pagination';
 import Navbar from '../components/Navbar';
+import FavoriButton from '../components/FavoriButton';
 
 const specialites = [
   { id: '', icon: '🌐', label: 'Tous' },
@@ -138,15 +139,31 @@ const ArtisansListe = () => {
             return (
               <motion.div
                 key={a.id}
-                style={styles.card}
+                style={{ ...styles.card, position: 'relative' }}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.05 }}
                 whileHover={{ y: -4, boxShadow: '0 14px 32px rgba(20,30,60,0.12)' }}
               >
-                <Avatar photo={a.photo} name={a.username} size={64} fontSize={26}
-                  style={{ display: 'inline-flex', marginBottom: '14px' }} />
-                <h3 style={styles.cardName}>{a.username}</h3>
+                {user?.role === 'client' && (
+                  <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 1 }}>
+                    <FavoriButton
+                      estFavori={a.est_favori}
+                      onToggle={async () => (await api.post(`/favoris/artisans/${a.id}/toggle/`)).data}
+                    />
+                  </div>
+                )}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/artisans/${a.id}`)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/artisans/${a.id}`); }}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <Avatar photo={a.photo} name={a.username} size={64} fontSize={26}
+                    style={{ display: 'inline-flex', marginBottom: '14px' }} />
+                  <h3 style={styles.cardName}>{a.username}</h3>
+                </div>
                 <p style={styles.cardSpecialite}>{spec ? `${spec.icon} ${spec.label}` : '🔧 Métier non précisé'}</p>
                 {a.adresse && <p style={styles.cardAdresse}>📍 {a.adresse}</p>}
                 <div style={styles.cardPerforation} />
@@ -157,15 +174,19 @@ const ArtisansListe = () => {
                   </span>
                 </div>
                 <motion.button
+                  onClick={() => navigate(`/artisans/${a.id}`)}
+                  whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                  style={styles.profileBtn}
+                >
+                  Voir le profil
+                </motion.button>
+                <motion.button
                   onClick={contacterArtisan}
                   whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
                   style={styles.contactBtn}
                 >
                   Publier une demande
                 </motion.button>
-                <p style={styles.cardHint}>
-                  Visible par tous les artisans en {spec ? spec.label.toLowerCase() : 'ce domaine'}
-                </p>
               </motion.div>
             );
           })
@@ -222,6 +243,11 @@ const styles = {
   cardPerforation: {
     height: '1px', margin: '16px 0 0',
     backgroundImage: 'repeating-linear-gradient(to right, #e2e5ee 0, #e2e5ee 4px, transparent 4px, transparent 9px)',
+  },
+    profileBtn: {
+    width: '100%', border: '1.5px solid #1a73e8', backgroundColor: '#fff', color: '#1a73e8',
+    padding: '11px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+    marginBottom: '8px',
   },
   contactBtn: {
     width: '100%', border: 'none', backgroundColor: '#1a73e8', color: '#fff',

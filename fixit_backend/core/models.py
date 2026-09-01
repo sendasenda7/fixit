@@ -49,6 +49,41 @@ class User(AbstractUser):
             FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'webp']),
         ],
     )
+    bio = models.TextField(
+        blank=True,
+        max_length=1000,
+        help_text="Présentation affichée sur le profil public de l'artisan",
+    )
+    competences = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Compétences de l'artisan, séparées par des virgules (ex: Installation Électrique, Domotique)",
+    )
+
+    STATUT_VERIFICATION_CHOICES = [
+        ('non_soumis', 'Non soumis'),
+        ('en_attente', 'En attente de validation'),
+        ('verifie', 'Vérifié'),
+        ('rejete', 'Rejeté'),
+    ]
+    document_verification = models.FileField(
+        upload_to='verifications/',
+        blank=True,
+        null=True,
+        validators=[FileExtensionValidator(allowed_extensions=['jpg', 'jpeg', 'png', 'pdf'])],
+        help_text="Pièce d'identité ou justificatif professionnel (CIN, matricule fiscal...)",
+    )
+    statut_verification = models.CharField(
+        max_length=20,
+        choices=STATUT_VERIFICATION_CHOICES,
+        default='non_soumis',
+    )
+    date_soumission_verification = models.DateTimeField(null=True, blank=True)
+    date_traitement_verification = models.DateTimeField(null=True, blank=True)
+    motif_rejet = models.CharField(
+        max_length=255, blank=True,
+        help_text="Raison du rejet communiquée à l'artisan (visible seulement si rejeté)",
+    )
 
     def __str__(self):
         return f"{self.username} ({self.role})"
@@ -93,7 +128,20 @@ class Demande(models.Model):
         on_delete=models.CASCADE,
         related_name='demandes'
     )
-
+    urgent = models.BooleanField(
+        default=False,
+        help_text="Demande à traiter en priorité (affichée avec un badge Urgent)",
+    )
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+    date_debut = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Date à laquelle une offre a été acceptée (passage à 'En cours')",
+    )
+    date_fin = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Date à laquelle la mission a été marquée terminée",
+    )
     def __str__(self):
         return f"{self.titre} - {self.client.username}"
 
@@ -152,6 +200,12 @@ class Evaluation(models.Model):
         on_delete=models.CASCADE,
         related_name='evaluations_recues'
     )
+    reponse_artisan = models.TextField(
+        blank=True,
+        max_length=1000,
+        help_text="Réponse publique de l'artisan à cet avis",
+    )
+    date_reponse = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"Évaluation {self.note}⭐ par {self.client.username}"
@@ -224,7 +278,11 @@ class Notification(models.Model):
         ('offre_acceptee', 'Offre acceptée'),
         ('nouveau_message', 'Nouveau message'),
         ('nouvel_avis', 'Nouvel avis'),
+        ('verification', 'Vérification identité'),
     ]
+    
+    
+    
 
     destinataire = models.ForeignKey(
         User,
@@ -243,3 +301,35 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.get_type_display()} pour {self.destinataire.username}"
+    
+    
+    # ================================
+# MODÈLE FAVORI ARTISAN (un client suit un artisan)
+# ================================
+class FavoriArtisan(models.Model):
+    client = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favoris_artisans')
+    artisan = models.ForeignKey(User, on_delete=models.CASCADE, related_name='suivi_par')
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('client', 'artisan')
+        ordering = ['-date_creation']
+
+    def __str__(self):
+        return f"{self.client.username} ♥ {self.artisan.username}"
+
+
+# ================================
+# MODÈLE FAVORI DEMANDE (un artisan sauvegarde une demande pour plus tard)
+# ================================
+class FavoriDemande(models.Model):
+    artisan = models.ForeignKey(User, on_delete=models.CASCADE, related_name='demandes_favorites')
+    demande = models.ForeignKey(Demande, on_delete=models.CASCADE, related_name='favorisee_par')
+    date_creation = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('artisan', 'demande')
+        ordering = ['-date_creation']
+
+    def __str__(self):
+        return f"{self.artisan.username} ♥ {self.demande.titre}"

@@ -16,6 +16,7 @@ urlpatterns = [
 
     # Artisans (public)
     path('artisans/', views.artisans_list),
+        path('artisans/<int:pk>/', views.artisan_detail),
 
     # Demandes
     path('demandes/', views.demandes_list),
@@ -31,6 +32,7 @@ urlpatterns = [
     path('evaluations/', views.evaluations_list),
     path('evaluations/artisan/<int:artisan_id>/', views.evaluations_artisan),
     path('evaluations/evaluer/<int:offre_id>/', views.evaluer_artisan),
+    path('evaluations/<int:evaluation_id>/repondre/', views.repondre_avis),
 
     # Messagerie
     path('conversations/', views.conversations_list),
@@ -41,5 +43,17 @@ urlpatterns = [
     path('notifications/non-lues/', views.notifications_non_lues),
     path('notifications/<int:pk>/lire/', views.notification_marquer_lue),
     path('notifications/tout-lire/', views.notifications_tout_marquer_lu),
+
+    # Favoris
+    path('favoris/artisans/', views.mes_favoris_artisans),
+    path('favoris/artisans/<int:artisan_id>/toggle/', views.toggle_favori_artisan),
+    path('favoris/demandes/', views.mes_favoris_demandes),
+    path('favoris/demandes/<int:demande_id>/toggle/', views.toggle_favori_demande),
+
+    # Vérification d'identité
+    path('verification/soumettre/', views.soumettre_verification),
+    path('verification/en-attente/', views.verifications_en_attente),
+    path('verification/<int:artisan_id>/approuver/', views.approuver_verification),
+    path('verification/<int:artisan_id>/rejeter/', views.rejeter_verification),
 
 ]

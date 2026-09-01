@@ -126,8 +126,7 @@ const Step2 = ({ formData, setFormData, errors }) => (
 );
 
 // ========== STEP 3 ==========
-const Step3 = ({ formData, setFormData, errors }) => (
-  <motion.div
+const Step3 = ({ formData, setFormData, errors, onUseLocation, locating, locationError }) => (  <motion.div
     initial={{ opacity: 0, x: 30 }}
     animate={{ opacity: 1, x: 0 }}
     exit={{ opacity: 0, x: -30 }}
@@ -170,6 +169,39 @@ const Step3 = ({ formData, setFormData, errors }) => (
       {errors.budget && <p style={styles.errorMsg}>❌ {errors.budget}</p>}
     </div>
 
+  {/* Urgence */}
+    <div style={styles.formGroup}>
+      <label style={styles.urgentToggle}>
+        <input
+          type="checkbox"
+          checked={formData.urgent}
+          onChange={(e) => setFormData({ ...formData, urgent: e.target.checked })}
+        />
+        <span>🚨 Cette demande est <strong>urgente</strong> (intervention rapide souhaitée)</span>
+      </label>
+    </div>
+
+    {/* Position GPS pour le filtre "à proximité" des artisans */}
+    <div style={styles.formGroup}>
+      <motion.button
+        type="button"
+        onClick={onUseLocation}
+        whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+        style={{
+          ...styles.locationBtn,
+          backgroundColor: formData.latitude ? '#e8f9ef' : '#f0f0f0',
+          color: formData.latitude ? '#00854a' : '#333',
+        }}
+        disabled={locating}
+      >
+        {locating ? '📍 Localisation en cours…' : formData.latitude ? '✅ Position partagée' : '📍 Utiliser ma position actuelle'}
+      </motion.button>
+      <p style={styles.locationHint}>
+        Permet aux artisans de filtrer les demandes "à proximité". Optionnel.
+      </p>
+      {locationError && <p style={styles.errorMsg}>❌ {locationError}</p>}
+    </div>
+
     {/* Budgets suggérés */}
     <div style={styles.budgetSuggestions}>
       <p style={styles.suggestLabel}>Budgets suggérés :</p>
@@ -205,6 +237,8 @@ const Step3 = ({ formData, setFormData, errors }) => (
           { label: 'Titre', value: formData.titre || '—' },
           { label: 'Localisation', value: formData.localisation || '—' },
           { label: 'Budget', value: formData.budget ? `${formData.budget} TND` : '—' },
+          { label: 'Urgence', value: formData.urgent ? '🚨 Urgente' : 'Normale' },
+
         ].map((item) => (
           <div key={item.label} style={styles.recapItem}>
             <span style={styles.recapLabel}>{item.label}</span>
@@ -230,8 +264,36 @@ const NouvelleDemande = () => {
     type_service: serviceInitial,
     localisation: '',
     budget: '',
+    urgent: false,
+    latitude: null,
+    longitude: null,
   });
   const [errors, setErrors] = useState({});
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  const handleUseLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("La géolocalisation n'est pas disponible sur ce navigateur.");
+      return;
+    }
+    setLocating(true);
+    setLocationError('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setFormData((prev) => ({
+          ...prev,
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        }));
+        setLocating(false);
+      },
+      () => {
+        setLocationError("Impossible de récupérer ta position. Vérifie les autorisations du navigateur.");
+        setLocating(false);
+      }
+    );
+  };
 
   const validateStep = () => {
     const newErrors = {};
@@ -379,8 +441,8 @@ const handleSubmit = async () => {
           <AnimatePresence mode="wait">
             {step === 1 && <Step1 key="step1" formData={formData} setFormData={setFormData} errors={errors} />}
             {step === 2 && <Step2 key="step2" formData={formData} setFormData={setFormData} errors={errors} />}
-            {step === 3 && <Step3 key="step3" formData={formData} setFormData={setFormData} errors={errors} />}
-          </AnimatePresence>
+            {step === 3 && <Step3 key="step3" formData={formData} setFormData={setFormData} errors={errors}
+            onUseLocation={handleUseLocation} locating={locating} locationError={locationError} />}          </AnimatePresence>
 
           {/* Boutons */}
           <div style={styles.navButtons}>
@@ -562,6 +624,16 @@ const styles = {
     height: '4px', backgroundColor: '#00c853',
     borderRadius: '2px', marginBottom: '15px',
   },
+  urgentToggle: {
+    display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', color: '#333',
+    backgroundColor: '#fff8ee', border: '1.5px solid #ffe0b2', borderRadius: '10px',
+    padding: '14px 16px', cursor: 'pointer',
+  },
+  locationBtn: {
+    width: '100%', border: '1.5px solid #e0e0e0', borderRadius: '10px',
+    padding: '13px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
+  },
+  locationHint: { fontSize: '12px', color: '#999', margin: '8px 0 0' },
 };
 
 export default NouvelleDemande;

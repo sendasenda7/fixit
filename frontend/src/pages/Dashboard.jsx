@@ -8,6 +8,8 @@ import Avatar from '../components/Avatar';
 import NotificationBell from '../components/NotificationBell';
 import Modal from '../components/Modal';
 import FormField from '../components/FormField';
+import StatusTimeline from '../components/StatusTimeline';
+import FavoriButton from '../components/FavoriButton';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -156,11 +158,34 @@ const Dashboard = () => {
   // Bascule mode artisan
   const [artisanModeLoading, setArtisanModeLoading] = useState(false);
   const [artisanModeError, setArtisanModeError] = useState('');
+    // Favoris (artisans suivis)
+  const [favoris, setFavoris] = useState([]);
+  const [favorisLoading, setFavorisLoading] = useState(true);
+  const [favorisCharges, setFavorisCharges] = useState(false);
+
+  const fetchFavoris = async () => {
+    setFavorisLoading(true);
+    try {
+      const res = await api.get('/favoris/artisans/');
+      setFavoris(res.data);
+      setFavorisCharges(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFavorisLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) { navigate('/login'); return; }
     fetchDemandes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
+
+  useEffect(() => {
+    if (activeMenu === 'favoris' && !favorisCharges) fetchFavoris();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMenu]);
 
   const fetchDemandes = async () => {
     try {
@@ -195,6 +220,7 @@ const Dashboard = () => {
   const [confirmArtisanModalOpen, setConfirmArtisanModalOpen] = useState(false);
   const [specialiteChoisie, setSpecialiteChoisie] = useState('');
   const [deleteDemandeModal, setDeleteDemandeModal] = useState(null);
+    const [timelineModal, setTimelineModal] = useState(null);
   const [deleteDemandeLoading, setDeleteDemandeLoading] = useState(false);
 
   const confirmerSuppressionDemande = async () => {
@@ -361,10 +387,11 @@ const Dashboard = () => {
     border: darkMode ? '#2a2a3e' : '#f0f0f0',
   };
 
-  const menuItems = [
+    const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'demandes', icon: '📋', label: 'Demandes' },
     { id: 'offres', icon: '💼', label: 'Offres' },
+    { id: 'favoris', icon: '❤️', label: 'Favoris' },
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'profil', icon: '👤', label: 'Profil' },
     { id: 'parametres', icon: '⚙️', label: 'Paramètres' },
@@ -537,9 +564,10 @@ const Dashboard = () => {
           {demandes.map((d, i) => {
             const s = getStatutColor(d.statut);
             return (
-              <motion.div key={d.id} style={styles.demandeRow}
+              <motion.div key={d.id} style={{ ...styles.demandeRow, cursor: 'pointer' }}
                 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.08 }} whileHover={{ backgroundColor: '#f8faff', x: 4 }}>
+                transition={{ delay: i * 0.08 }} whileHover={{ backgroundColor: '#f8faff', x: 4 }}
+                onClick={() => setTimelineModal(d)}>
                 <div style={styles.demandeRowLeft}>
                   <span style={styles.demandeRowIcon}>
                     {getServiceIcon(d.type_service)}
@@ -556,11 +584,56 @@ const Dashboard = () => {
                     {d.statut === 'ouverte' ? '🟢 Ouverte' : d.statut === 'en_cours' ? '🔄 En cours' : '✅ Terminée'}
                   </span>
                   <motion.button style={styles.deleteBtn} whileHover={{ scale: 1.1 }}
-                    onClick={() => setDeleteDemandeModal(d)}>🗑️</motion.button>
+                    onClick={(e) => { e.stopPropagation(); setDeleteDemandeModal(d); }}>🗑️</motion.button>
                 </div>
               </motion.div>
             );
           })}
+        </div>
+      )}
+    </motion.div>
+  );
+
+    const renderFavoris = () => (
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      {favorisLoading ? (
+        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+      ) : favoris.length === 0 ? (
+        <div style={styles.emptyBox}>
+          <p style={{ fontSize: '40px' }}>🤍</p>
+          <p style={{ color: theme.subtext }}>Aucun artisan favori pour l'instant</p>
+          <motion.button style={styles.emptyBtn} onClick={() => navigate('/artisans')} whileHover={{ scale: 1.05 }}>
+            Parcourir les artisans
+          </motion.button>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '16px' }}>
+          {favoris.map((a, i) => (
+            <motion.div
+              key={a.id}
+              style={{ ...styles.tableCard, backgroundColor: theme.card, padding: '18px', textAlign: 'center', cursor: 'pointer', position: 'relative' }}
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
+              whileHover={{ y: -3 }}
+              onClick={() => navigate(`/artisans/${a.id}`)}
+            >
+              <div style={{ position: 'absolute', top: '8px', right: '8px' }}>
+                <FavoriButton
+                  estFavori={true}
+                  onToggle={async () => {
+                    const res = await api.post(`/favoris/artisans/${a.id}/toggle/`);
+                    if (!res.data.est_favori) setFavoris(prev => prev.filter(f => f.id !== a.id));
+                    return res.data;
+                  }}
+                  size={17}
+                />
+              </div>
+              <p style={{ fontWeight: '700', color: theme.text, margin: '4px 0 2px' }}>{a.username}</p>
+              <p style={{ fontSize: '12px', color: theme.subtext, margin: 0 }}>
+                {a.specialite || 'Métier non précisé'} {a.nb_avis > 0 ? `· ⭐ ${a.note_moyenne}` : ''}
+              </p>
+            </motion.div>
+          ))}
         </div>
       )}
     </motion.div>
@@ -742,7 +815,7 @@ const Dashboard = () => {
       case 'dashboard': return renderDashboard();
       case 'demandes': return renderDemandes();
       case 'offres': return renderOffres();
-      case 'profil': return renderProfil();
+      case 'favoris': return renderFavoris();      case 'profil': return renderProfil();
       case 'parametres': return renderParametres();
       default: return null;
     }
@@ -988,6 +1061,16 @@ const Dashboard = () => {
             {deleteDemandeLoading ? '⏳...' : '🗑️ Supprimer'}
           </motion.button>
         </div>
+      </Modal>
+            <Modal open={!!timelineModal} onClose={() => setTimelineModal(null)}
+        theme={theme} maxWidth="420px">
+        <h2 style={{ fontSize: '18px', fontWeight: '800', color: theme.text, margin: '0 0 4px' }}>
+          {timelineModal?.titre}
+        </h2>
+        <p style={{ color: theme.subtext, fontSize: '13px', marginBottom: '24px' }}>
+          📍 {timelineModal?.localisation} · 💰 {timelineModal?.budget} TND
+        </p>
+        {timelineModal && <StatusTimeline demande={timelineModal} />}
       </Modal>
 
       <div style={{ ...styles.container, backgroundColor: theme.bg }}>

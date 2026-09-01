@@ -41,6 +41,9 @@ const Navbar = () => {
         {user ? (
           <>
             <NotificationBell />
+            {user.role === 'artisan' && (
+              <Link to={`/artisans/${user.id}`} style={styles.btnLogin} onClick={closeMenu}>Mon profil</Link>
+            )}
             <Link to="/dashboard" style={styles.btnLogin}>Tableau de bord</Link>
             <button
               type="button"

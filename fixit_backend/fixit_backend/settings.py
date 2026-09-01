@@ -171,6 +171,9 @@ REST_FRAMEWORK = {
     'DEFAULT_THROTTLE_RATES': {
         # Anti brute-force : limite les tentatives de connexion par IP
         'login': '5/min',
+        # Anti-spam : limite les créations (POST uniquement, voir throttles.py)
+        'offre': '10/min',
+        'message': '30/min',
     },
 }
 

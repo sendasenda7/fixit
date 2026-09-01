@@ -10,7 +10,9 @@ import Pagination from '../components/Pagination';
 import NotificationBell from '../components/NotificationBell';
 import Modal from '../components/Modal';
 import FormField from '../components/FormField';
-
+import DemandesMap from '../components/DemandesMap';
+import StatusTimeline from '../components/StatusTimeline';
+import FavoriButton from '../components/FavoriButton';
 const specialites = [
   { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
   { id: 'electricite', icon: '⚡', label: 'Électricité' },
@@ -29,7 +31,7 @@ const DashboardArtisan = () => {
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false); // sidebar mobile (fermée par défaut)
-  const [filtreService, setFiltreService] = useState('');
+  const [filtreServices, setFiltreServices] = useState([]); // multi-sélection  
   const [offreModal, setOffreModal] = useState(null); // demande sélectionnée
   const [offreForm, setOffreForm] = useState({ prix_propose: '', message: '' });
   const [offreLoading, setOffreLoading] = useState(false);
@@ -61,6 +63,8 @@ const DashboardArtisan = () => {
     fetchDemandes();
     fetchMesOffres();
     fetchEvaluations();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [user]);
 
   const fetchEvaluations = async () => {
@@ -81,16 +85,79 @@ const DashboardArtisan = () => {
   const DEMANDES_PAGE_SIZE = 12;
   const [rechercheQ, setRechercheQ] = useState('');
   const [budgetMin, setBudgetMin] = useState('');
-  const [budgetMax, setBudgetMax] = useState('');
+  const [budgetMax, setBudgetMax] = useState(2000);
+  const BUDGET_SLIDER_MAX = 2000;
   const [tri, setTri] = useState('recent');
+  const [urgentSeulement, setUrgentSeulement] = useState(false);
+  const [distanceMode, setDistanceMode] = useState('city'); // 'city' | 'nearby'
+  const [maPosition, setMaPosition] = useState(null); // { lat, lng }
+  const [localisationEnCours, setLocalisationEnCours] = useState(false);
+  const [localisationErreur, setLocalisationErreur] = useState('');
+  const [vueMode, setVueMode] = useState('liste'); // 'liste' | 'carte'
+  const [demandesCarte, setDemandesCarte] = useState([]);
+  const [chargementCarte, setChargementCarte] = useState(false);
+  const [timelineModal, setTimelineModal] = useState(null);
+    // Favoris (demandes sauvegardées)
+  const [favorisDemandes, setFavorisDemandes] = useState([]);
+  const [favorisDemandesLoading, setFavorisDemandesLoading] = useState(true);
+  const [favorisDemandesCharges, setFavorisDemandesCharges] = useState(false);
 
-  const fetchDemandes = async (pageToLoad = 1) => {
+  const fetchFavorisDemandes = async () => {
+    setFavorisDemandesLoading(true);
+    try {
+      const res = await api.get('/favoris/demandes/');
+      setFavorisDemandes(res.data);
+      setFavorisDemandesCharges(true);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setFavorisDemandesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeMenu === 'favoris' && !favorisDemandesCharges) fetchFavorisDemandes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMenu]);
+  const basculerService = (id) => {
+    setFiltreServices((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
+
+  const activerNearby = () => {
+    if (maPosition) { setDistanceMode('nearby'); return; }
+    if (!navigator.geolocation) {
+      setLocalisationErreur("Géolocalisation indisponible sur ce navigateur.");
+      return;
+    }
+    setLocalisationEnCours(true);
+    setLocalisationErreur('');
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setMaPosition({ lat: position.coords.latitude, lng: position.coords.longitude });
+        setDistanceMode('nearby');
+        setLocalisationEnCours(false);
+      },
+      () => {
+        setLocalisationErreur("Impossible de récupérer ta position.");
+        setLocalisationEnCours(false);
+      }
+    );
+  };
+    const fetchDemandes = async (pageToLoad = 1) => {
     try {
       const params = new URLSearchParams({ statut: 'ouverte', page: pageToLoad, tri });
-      if (filtreService) params.append('type_service', filtreService);
+      if (filtreServices.length > 0) params.append('type_service', filtreServices.join(','));
       if (rechercheQ) params.append('q', rechercheQ);
-      if (budgetMin) params.append('budget_min', budgetMin);
-      if (budgetMax) params.append('budget_max', budgetMax);
+      if (budgetMin && Number(budgetMin) > 0) params.append('budget_min', budgetMin);
+      if (budgetMax && Number(budgetMax) < BUDGET_SLIDER_MAX) params.append('budget_max', budgetMax);
+      if (urgentSeulement) params.append('urgent', '1');
+      if (distanceMode === 'nearby' && maPosition) {
+        params.append('lat', maPosition.lat);
+        params.append('lng', maPosition.lng);
+        params.append('distance', 'nearby');
+      }
       const res = await api.get(`/demandes/?${params.toString()}`);
       setDemandes(res.data.results ?? res.data);
       setDemandesCount(res.data.count ?? (res.data.results ?? res.data).length);
@@ -103,9 +170,6 @@ const DashboardArtisan = () => {
 
   const fetchMesOffres = async () => {
     try {
-      // Vue "Mes offres" scopée à cet artisan : on demande une page assez
-      // large pour tout récupérer d'un coup (pas besoin de pagination visible
-      // sur une liste déjà filtrée par utilisateur).
       const res = await api.get(`/offres/?artisan=${user.id}&page_size=50`);
       setMesOffres(res.data.results ?? res.data);
     } catch (err) {
@@ -113,25 +177,49 @@ const DashboardArtisan = () => {
     }
   };
 
+  const fetchDemandesCarte = async () => {
+    setChargementCarte(true);
+    try {
+      const params = new URLSearchParams({ statut: 'ouverte', page: 1, page_size: 100, tri });
+      if (filtreServices.length > 0) params.append('type_service', filtreServices.join(','));
+      if (rechercheQ) params.append('q', rechercheQ);
+      if (budgetMin && Number(budgetMin) > 0) params.append('budget_min', budgetMin);
+      if (budgetMax && Number(budgetMax) < BUDGET_SLIDER_MAX) params.append('budget_max', budgetMax);
+      if (urgentSeulement) params.append('urgent', '1');
+      if (distanceMode === 'nearby' && maPosition) {
+        params.append('lat', maPosition.lat);
+        params.append('lng', maPosition.lng);
+        params.append('distance', 'nearby');
+      }
+      const res = await api.get(`/demandes/?${params.toString()}`);
+      setDemandesCarte(res.data.results ?? res.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setChargementCarte(false);
+    }
+  };
+
   useEffect(() => {
-    setDemandesPage(1);
-    fetchDemandes(1);
-  }, [filtreService]);
+    if (vueMode === 'carte') fetchDemandesCarte();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vueMode, filtreServices, urgentSeulement, distanceMode, budgetMax, budgetMin, tri]);
 
   useEffect(() => {
     setDemandesPage(1);
     fetchDemandes(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tri]);
+  }, [filtreServices, urgentSeulement, distanceMode]);
 
   useEffect(() => {
     fetchDemandes(demandesPage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demandesPage]);
 
-  const appliquerFiltres = () => {
+   const appliquerFiltres = () => {
     setDemandesPage(1);
     fetchDemandes(1);
+    if (vueMode === 'carte') fetchDemandesCarte();
   };
 
   const soumettreOffre = async () => {
@@ -153,7 +241,11 @@ const DashboardArtisan = () => {
       fetchMesOffres();
       setTimeout(() => setOffreSuccess(false), 3000);
     } catch (err) {
-      setOffreError(err.response?.data?.error || "L'offre n'a pas pu être envoyée. Réessayez.");
+      if (err.response?.status === 429) {
+        setOffreError('Trop d\'offres envoyées récemment. Merci de patienter une minute avant de réessayer.');
+      } else {
+        setOffreError(err.response?.data?.error || "L'offre n'a pas pu être envoyée. Réessayez.");
+      }
     } finally {
       setOffreLoading(false);
     }
@@ -161,43 +253,99 @@ const DashboardArtisan = () => {
 
   const serviceIcon = (type) => specialites.find(s => s.id === type)?.icon || '🔧';
 
-  const menuItems = [
+    const menuItems = [
     { id: 'dashboard', icon: '📊', label: 'Dashboard' },
     { id: 'demandes', icon: '📋', label: 'Demandes disponibles' },
     { id: 'mes_offres', icon: '💼', label: 'Mes offres' },
+    { id: 'favoris', icon: '❤️', label: 'Favoris' },
     { id: 'messages', icon: '💬', label: 'Messages' },
     { id: 'profil', icon: '👤', label: 'Mon profil' },
   ];
-
   const renderDemandes = () => (
-    <div>
-      {/* Filtres */}
-      <div style={styles.filtres}>
-        {[{ id: '', icon: '🌐', label: 'Tous' }, ...specialites].map(s => (
-          <motion.button
-            key={s.id}
-            style={{
-              ...styles.filtreBtn,
-              backgroundColor: filtreService === s.id ? '#1a73e8' : '#f0f0f0',
-              color: filtreService === s.id ? '#fff' : '#333',
-            }}
-            onClick={() => setFiltreService(s.id)}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            {s.icon} {s.label}
-          </motion.button>
-        ))}
-      </div>
+    <div style={styles.demandesLayout}>
+      {/* Sidebar filtres, façon maquette */}
+      <aside style={styles.filtresSidebar}>
+        <h4 style={styles.filtresSidebarTitle}>Filtres</h4>
 
-      {/* Filtres avancés */}
-      <div style={styles.filtresAvances}>
-        <input
-          type="text"
-          placeholder="🔍 Rechercher (titre, description, lieu)"
-          value={rechercheQ}
-          onChange={e => setRechercheQ(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
+        <p style={styles.filtreGroupLabel}>Type de service</p>
+        <div style={styles.checkboxList}>
+          {specialites.map(s => (
+            <label key={s.id} style={styles.checkboxRow}>
+              <input
+                type="checkbox"
+                checked={filtreServices.includes(s.id)}
+                onChange={() => basculerService(s.id)}
+              />
+              <span>{s.icon} {s.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <p style={styles.filtreGroupLabel}>Budget (TND)</p>
+        <div style={styles.budgetSliderWrap}>
+          <input
+            type="range"
+            min={0}
+            max={BUDGET_SLIDER_MAX}
+            step={50}
+            value={budgetMax}
+            onChange={e => setBudgetMax(Number(e.target.value))}
+            onMouseUp={appliquerFiltres}
+            onTouchEnd={appliquerFiltres}
+            style={styles.rangeInput}
+          />
+          <div style={styles.budgetSliderLabels}>
+            <span>0 TND</span>
+            <span>{budgetMax >= BUDGET_SLIDER_MAX ? `${BUDGET_SLIDER_MAX}+ TND` : `${budgetMax} TND`}</span>
+          </div>
+        </div>
+
+        <p style={styles.filtreGroupLabel}>Distance</p>
+        <div style={styles.distanceToggle}>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={activerNearby}
+            style={{
+              ...styles.distanceBtn,
+              backgroundColor: distanceMode === 'nearby' ? '#1a73e8' : '#fff',
+              color: distanceMode === 'nearby' ? '#fff' : '#333',
+            }}
+          >
+            {localisationEnCours ? '📍…' : 'À proximité (5km)'}
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.97 }}
+            onClick={() => setDistanceMode('city')}
+            style={{
+              ...styles.distanceBtn,
+              backgroundColor: distanceMode === 'city' ? '#1a73e8' : '#fff',
+              color: distanceMode === 'city' ? '#fff' : '#333',
+            }}
+          >
+            Toute la ville
+          </motion.button>
+        </div>
+        {localisationErreur && <p style={{ ...styles.errorMsg, fontSize: '12px' }}>{localisationErreur}</p>}
+
+        <label style={styles.checkboxRow}>
+          <input
+            type="checkbox"
+            checked={urgentSeulement}
+            onChange={e => setUrgentSeulement(e.target.checked)}
+          />
+          <span>🚨 Urgentes uniquement</span>
+        </label>
+      </aside>
+
+      {/* Colonne résultats */}
+      <div style={styles.demandesResultats}>
+        <div style={styles.filtresAvances}>
+          <input
+            type="text"
+            placeholder="🔍 Rechercher (titre, description, lieu)"
+            value={rechercheQ}
+            onChange={e => setRechercheQ(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
           style={styles.filtreInput}
         />
         <input
@@ -205,14 +353,6 @@ const DashboardArtisan = () => {
           placeholder="Budget min"
           value={budgetMin}
           onChange={e => setBudgetMin(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
-          style={{ ...styles.filtreInput, width: '110px' }}
-        />
-        <input
-          type="number"
-          placeholder="Budget max"
-          value={budgetMax}
-          onChange={e => setBudgetMax(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && appliquerFiltres()}
           style={{ ...styles.filtreInput, width: '110px' }}
         />
@@ -226,15 +366,40 @@ const DashboardArtisan = () => {
           style={styles.filtreApplyBtn}>
           Appliquer
         </motion.button>
-      </div>
+                <div style={styles.vueToggle}>
+          <button
+            onClick={() => setVueMode('liste')}
+            style={{ ...styles.vueToggleBtn, ...(vueMode === 'liste' ? styles.vueToggleBtnActif : {}) }}
+          >
+            📋 Liste
+          </button>
+          <button
+            onClick={() => setVueMode('carte')}
+            style={{ ...styles.vueToggleBtn, ...(vueMode === 'carte' ? styles.vueToggleBtnActif : {}) }}
+          >
+            🗺️ Carte
+          </button>
+        </div>
+        </div>
 
-      {loading ? (
+            {loading ? (
         <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
       ) : demandes.length === 0 ? (
         <div style={styles.emptyBox}>
           <p style={{ fontSize: '40px' }}>📭</p>
           <p style={{ color: '#888' }}>Aucune demande disponible</p>
         </div>
+      ) : vueMode === 'carte' ? (
+        chargementCarte ? (
+          <div style={styles.emptyBox}><p>⏳ Chargement de la carte...</p></div>
+        ) : (
+          <DemandesMap
+            demandes={demandesCarte}
+            maPosition={maPosition}
+            onFaireOffre={(d) => { setOffreModal(d); setOffreError(''); }}
+            dejaOfferIds={new Set(mesOffres.map(o => o.demande))}
+          />
+        )
       ) : (
         <div style={styles.demandesGrid}>
           {demandes.map((d, i) => {
@@ -251,11 +416,19 @@ const DashboardArtisan = () => {
                 <div style={styles.demandeCardHeader}>
                   <span style={styles.demandeCardIcon}>{serviceIcon(d.type_service)}</span>
                   <span style={styles.serviceTag}>{d.type_service}</span>
+                  {d.urgent && <span style={styles.urgentBadge}>🚨 Urgent</span>}
+                  <div style={{ marginLeft: d.urgent ? '4px' : 'auto' }}>
+                    <FavoriButton
+                      estFavori={d.est_favori}
+                      onToggle={async () => (await api.post(`/favoris/demandes/${d.id}/toggle/`)).data}
+                      size={17}
+                    />
+                  </div>
                 </div>
                 <h3 style={styles.demandeCardTitle}>{d.titre}</h3>
                 <p style={styles.demandeCardDesc}>{d.description.slice(0, 100)}...</p>
                 <div style={styles.demandeCardInfo}>
-                  <span>📍 {d.localisation}</span>
+                  <span>📍 {d.localisation}{d.distance_km != null ? ` · ${d.distance_km} km` : ''}</span>
                   <span style={{ color: '#1a73e8', fontWeight: '700' }}>💰 {d.budget} TND</span>
                 </div>
                 <div style={styles.demandeCardFooter}>
@@ -279,14 +452,14 @@ const DashboardArtisan = () => {
         </div>
       )}
 
-      {!loading && demandes.length > 0 && (
-        <Pagination
+      {!loading && demandes.length > 0 && vueMode === 'liste' && (        <Pagination
           page={demandesPage}
           totalPages={Math.max(1, Math.ceil(demandesCount / DEMANDES_PAGE_SIZE))}
           onChange={setDemandesPage}
           accentColor="#00c853"
         />
       )}
+      </div>
     </div>
   );
 
@@ -294,6 +467,75 @@ const DashboardArtisan = () => {
     const res = await api.post('/conversations/', { demande: demandeId });
     navigate(`/messages?conversation=${res.data.id}`);
   };
+
+    const renderFavoris = () => (
+    <div>
+      {favorisDemandesLoading ? (
+        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+      ) : favorisDemandes.length === 0 ? (
+        <div style={styles.emptyBox}>
+          <p style={{ fontSize: '40px' }}>🤍</p>
+          <p style={{ color: '#888' }}>Aucune demande sauvegardée pour l'instant</p>
+        </div>
+      ) : (
+        <div style={styles.demandesGrid}>
+          {favorisDemandes.map((d, i) => {
+            const dejaOffert = mesOffres.some(o => o.demande === d.id);
+            return (
+              <motion.div
+                key={d.id}
+                style={styles.demandeCard}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.08 }}
+                whileHover={{ y: -5, boxShadow: '0 15px 35px rgba(0,0,0,0.1)' }}
+              >
+                <div style={styles.demandeCardHeader}>
+                  <span style={styles.demandeCardIcon}>{serviceIcon(d.type_service)}</span>
+                  <span style={styles.serviceTag}>{d.type_service}</span>
+                  {d.urgent && <span style={styles.urgentBadge}>🚨 Urgent</span>}
+                  <div style={{ marginLeft: d.urgent ? '4px' : 'auto' }}>
+                    <FavoriButton
+                      estFavori={true}
+                      onToggle={async () => {
+                        const res = await api.post(`/favoris/demandes/${d.id}/toggle/`);
+                        if (!res.data.est_favori) setFavorisDemandes(prev => prev.filter(f => f.id !== d.id));
+                        return res.data;
+                      }}
+                      size={17}
+                    />
+                  </div>
+                </div>
+                <h3 style={styles.demandeCardTitle}>{d.titre}</h3>
+                <p style={styles.demandeCardDesc}>{d.description.slice(0, 100)}...</p>
+                <div style={styles.demandeCardInfo}>
+                  <span>📍 {d.localisation}</span>
+                  <span style={{ color: '#1a73e8', fontWeight: '700' }}>💰 {d.budget} TND</span>
+                </div>
+                <div style={styles.demandeCardFooter}>
+                  <span style={styles.clientInfo}>👤 {d.client_nom}</span>
+                  {d.statut !== 'ouverte' ? (
+                    <span style={{ ...styles.statutBadge, backgroundColor: '#f0f0f0', color: '#888' }}>Non disponible</span>
+                  ) : dejaOffert ? (
+                    <span style={styles.dejaOffreBadge}>✅ Offre envoyée</span>
+                  ) : (
+                    <motion.button
+                      style={styles.offreBtn}
+                      onClick={() => { setOffreModal(d); setOffreError(''); }}
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      💼 Faire une offre
+                    </motion.button>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   const renderMesOffres = () => (
     <div>
@@ -306,10 +548,11 @@ const DashboardArtisan = () => {
         mesOffres.map((o, i) => (
           <motion.div
             key={o.id}
-            style={styles.offreRow}
+            style={{ ...styles.offreRow, cursor: 'pointer' }}
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: i * 0.08 }}
+            onClick={() => setTimelineModal(o)}
           >
             <div>
               <p style={styles.offreRowTitle}>{o.demande_titre || `Demande #${o.demande}`}</p>
@@ -327,7 +570,7 @@ const DashboardArtisan = () => {
               <motion.button
                 style={styles.contactBtn}
                 whileHover={{ scale: 1.05 }}
-                onClick={() => contacterClient(o.demande)}
+                onClick={(e) => { e.stopPropagation(); contacterClient(o.demande); }}
               >
                 💬 Contacter
               </motion.button>
@@ -656,7 +899,7 @@ const DashboardArtisan = () => {
       case 'dashboard': return renderDashboardArtisan();
       case 'demandes': return renderDemandes();
       case 'mes_offres': return renderMesOffres();
-      case 'profil': return renderProfil();
+      case 'favoris': return renderFavoris();      case 'profil': return renderProfil();
       default: return null;
     }
   };
@@ -783,6 +1026,23 @@ const DashboardArtisan = () => {
             {roleLoading ? '⏳...' : 'Confirmer'}
           </motion.button>
         </div>
+      </Modal> 
+
+    <Modal open={!!timelineModal} onClose={() => setTimelineModal(null)} maxWidth="420px">
+        <h2 style={{ fontSize: '18px', fontWeight: '800', color: '#1a1a2e', margin: '0 0 4px' }}>
+          {timelineModal?.demande_titre}
+        </h2>
+        <p style={{ color: '#8a90a3', fontSize: '13px', marginBottom: '24px' }}>
+          💰 Offre proposée : {timelineModal?.prix_propose} TND
+        </p>
+        {timelineModal && (
+          <StatusTimeline demande={{
+            statut: timelineModal.demande_statut,
+            date_creation: timelineModal.demande_date_creation,
+            date_debut: timelineModal.demande_date_debut,
+            date_fin: timelineModal.demande_date_fin,
+          }} />
+        )}
       </Modal>
 
       {/* Overlay mobile */}
@@ -938,10 +1198,41 @@ const styles = {
     border: 'none', backgroundColor: '#1a73e8', color: '#fff',
     padding: '10px 20px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
   },
+    vueToggle: {
+    display: 'flex', gap: '4px', backgroundColor: '#f0f0f0', borderRadius: '10px', padding: '4px', marginLeft: 'auto',
+  },
+  vueToggleBtn: {
+    border: 'none', backgroundColor: 'transparent', color: '#666',
+    padding: '8px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+  },
+  vueToggleBtnActif: {
+    backgroundColor: '#fff', color: '#1a73e8', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+  },
   filtreBtn: {
     padding: '8px 16px', borderRadius: '20px', border: 'none',
     fontSize: '13px', fontWeight: '600', cursor: 'pointer',
   },
+    errorMsg: { fontSize: '12px', color: '#d32f2f', margin: '6px 0 0' },
+  demandesLayout: {
+    display: 'grid', gridTemplateColumns: '230px 1fr', gap: '24px', alignItems: 'start',
+  },
+  filtresSidebar: {
+    backgroundColor: '#fff', borderRadius: '16px', padding: '20px',
+    boxShadow: '0 4px 24px rgba(20,30,60,0.08)', position: 'sticky', top: '20px',
+  },
+  filtresSidebarTitle: { fontFamily: FONT_DISPLAY, fontSize: '14px', fontWeight: '700', margin: '0 0 16px', color: '#1a1a2e' },
+  filtreGroupLabel: { fontSize: '11px', fontWeight: '700', color: '#8a90a3', textTransform: 'uppercase', margin: '18px 0 8px' },
+  checkboxList: { display: 'flex', flexDirection: 'column', gap: '8px' },
+  checkboxRow: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#333', cursor: 'pointer' },
+  budgetSliderWrap: { padding: '4px 2px' },
+  rangeInput: { width: '100%', accentColor: '#1a73e8' },
+  budgetSliderLabels: { display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#8a90a3', marginTop: '4px' },
+  distanceToggle: { display: 'flex', gap: '8px' },
+  distanceBtn: {
+    flex: 1, border: '1.5px solid #e2e5ee', borderRadius: '10px',
+    padding: '9px 6px', fontSize: '12px', fontWeight: '700', cursor: 'pointer',
+  },
+  demandesResultats: { minWidth: 0 },
   demandesGrid: {
     display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
     gap: '20px',
@@ -950,12 +1241,17 @@ const styles = {
     backgroundColor: '#fff', borderRadius: '18px', padding: '25px',
     boxShadow: '0 4px 24px rgba(20,30,60,0.08)', cursor: 'pointer',
   },
-  demandeCardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' },
+  demandeCardHeader: { display: 'flex', justifyContent: 'flex-start', alignItems: 'center', gap: '8px', marginBottom: '12px' },
   demandeCardIcon: { fontSize: '30px' },
   serviceTag: {
     backgroundColor: '#e8f4fd', color: '#1a73e8',
     padding: '4px 10px', borderRadius: '10px',
     fontSize: '12px', fontWeight: '700',
+  },
+  urgentBadge: {
+    backgroundColor: '#fdecea', color: '#d32f2f',
+    padding: '4px 10px', borderRadius: '10px',
+    fontSize: '11px', fontWeight: '700', marginLeft: 'auto',
   },
   demandeCardTitle: { fontFamily: FONT_DISPLAY, fontSize: '16px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 8px' },
   demandeCardDesc: { fontSize: '13px', color: '#8a90a3', lineHeight: '1.6', margin: '0 0 15px' },

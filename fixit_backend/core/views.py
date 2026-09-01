@@ -2,7 +2,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from .throttles import LoginRateThrottle
+from .throttles import LoginRateThrottle, OffreRateThrottle, MessageRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
@@ -17,12 +17,15 @@ from .models import User, Demande, Offre, Evaluation, Conversation, Message, Not
 from .serializers import (
     UserSerializer, RegisterSerializer,
     DemandeSerializer, OffreSerializer, EvaluationSerializer,
-    ArtisanPublicSerializer, ConversationSerializer, MessageSerializer,
+    ArtisanPublicSerializer, ArtisanDetailSerializer, ConversationSerializer, MessageSerializer,
     NotificationSerializer
 )
 from .pagination import StandardResultsSetPagination
-
-
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
+from .geo import haversine_km
+from django.utils import timezone
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification, FavoriArtisan, FavoriDemande
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 # ================================
 # AUTH
 # ================================
@@ -216,6 +219,17 @@ def artisans_list(request):
     serializer = ArtisanPublicSerializer(page, many=True, context={'request': request})
     return paginator.get_paginated_response(serializer.data)
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def artisan_detail(request, pk):
+    """Profil public détaillé d'un artisan : bio, compétences, missions, avis."""
+    try:
+        artisan = User.objects.get(pk=pk, role='artisan')
+    except User.DoesNotExist:
+        return Response({'error': 'Artisan introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = ArtisanDetailSerializer(artisan, context={'request': request})
+    return Response(serializer.data)
 
 # ================================
 # DEMANDES
@@ -224,8 +238,9 @@ def artisans_list(request):
 @permission_classes([AllowAny])
 def demandes_list(request):
     if request.method == 'GET':
-        # Filtres optionnels : ?type_service=plomberie&statut=ouverte
+                # Filtres optionnels : ?type_service=plomberie,electricite&statut=ouverte
         #                      &q=<recherche texte>&budget_min=&budget_max=&tri=
+        #                      &urgent=1&lat=&lng=&distance=nearby|city
         qs = Demande.objects.all()
         type_service = request.query_params.get('type_service')
         statut = request.query_params.get('statut')
@@ -233,11 +248,20 @@ def demandes_list(request):
         budget_min = request.query_params.get('budget_min')
         budget_max = request.query_params.get('budget_max')
         tri = request.query_params.get('tri', 'recent')
+        urgent = request.query_params.get('urgent')
+        lat = request.query_params.get('lat')
+        lng = request.query_params.get('lng')
+        distance_mode = request.query_params.get('distance')  # 'nearby' (5km) ou 'city' (tout)
 
         if type_service:
-            qs = qs.filter(type_service=type_service)
+            # Sélection multiple : ?type_service=plomberie,electricite
+            services = [s.strip() for s in type_service.split(',') if s.strip()]
+            if services:
+                qs = qs.filter(type_service__in=services)
         if statut:
             qs = qs.filter(statut=statut)
+        if urgent in ('1', 'true', 'True'):
+            qs = qs.filter(urgent=True)
         if q:
             qs = qs.filter(
                 models.Q(titre__icontains=q) |
@@ -255,6 +279,21 @@ def demandes_list(request):
             except (TypeError, ValueError):
                 pass
 
+        user_lat = user_lng = None
+        if lat and lng:
+            try:
+                user_lat, user_lng = float(lat), float(lng)
+            except (TypeError, ValueError):
+                user_lat = user_lng = None
+
+        if distance_mode == 'nearby' and user_lat is not None and user_lng is not None:
+            RAYON_NEARBY_KM = 5
+            ids_proches = [
+                d.id for d in qs.exclude(latitude__isnull=True).exclude(longitude__isnull=True)
+                if haversine_km(user_lat, user_lng, d.latitude, d.longitude) <= RAYON_NEARBY_KM
+            ]
+            qs = qs.filter(id__in=ids_proches)
+
         tri_map = {
             'recent': '-date_creation',
             'ancien': 'date_creation',
@@ -265,7 +304,7 @@ def demandes_list(request):
 
         paginator = StandardResultsSetPagination()
         page = paginator.paginate_queryset(qs, request)
-        serializer = DemandeSerializer(page, many=True)
+        serializer = DemandeSerializer(page, many=True, context={'user_lat': user_lat, 'user_lng': user_lng, 'request': request})        
         return paginator.get_paginated_response(serializer.data)
 
     # POST : nécessite d'être connecté ET d'être un client
@@ -287,9 +326,8 @@ def demande_detail(request, pk):
         demande = Demande.objects.get(pk=pk)
     except Demande.DoesNotExist:
         return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
-
     if request.method == 'GET':
-        return Response(DemandeSerializer(demande).data)
+        return Response(DemandeSerializer(demande, context={'request': request}).data)
 
     # Seul le propriétaire peut modifier ou supprimer
     if demande.client != request.user:
@@ -319,6 +357,7 @@ def mes_demandes(request):
 # ================================
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([OffreRateThrottle])
 def offres_list(request):
     if request.method == 'GET':
         offres = Offre.objects.all().order_by('-date_creation')
@@ -411,6 +450,7 @@ def accepter_offre(request, offre_id):
     offre.est_acceptee = True
     offre.save()
     offre.demande.statut = 'en_cours'
+    offre.demande.date_debut = timezone.now()
     offre.demande.save()
 
     Notification.objects.create(
@@ -473,6 +513,7 @@ def evaluer_artisan(request, offre_id):
     if serializer.is_valid():
         serializer.save(client=request.user, artisan=offre.artisan)
         offre.demande.statut = 'terminee'
+        offre.demande.date_fin = timezone.now()
         offre.demande.save()
         Notification.objects.create(
             destinataire=offre.artisan,
@@ -482,7 +523,36 @@ def evaluer_artisan(request, offre_id):
         )
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def repondre_avis(request, evaluation_id):
+    """L'artisan concerné répond publiquement à un avis client."""
+    try:
+        evaluation = Evaluation.objects.get(pk=evaluation_id)
+    except Evaluation.DoesNotExist:
+        return Response({'error': 'Avis introuvable'}, status=status.HTTP_404_NOT_FOUND)
 
+    if evaluation.artisan != request.user:
+        return Response({'error': 'Non autorisé'}, status=status.HTTP_403_FORBIDDEN)
+
+    reponse = request.data.get('reponse_artisan', '').strip()
+    if not reponse:
+        return Response({'error': 'La réponse ne peut pas être vide'}, status=status.HTTP_400_BAD_REQUEST)
+    if len(reponse) > 1000:
+        return Response({'error': 'La réponse est trop longue (1000 caractères max)'}, status=status.HTTP_400_BAD_REQUEST)
+
+    evaluation.reponse_artisan = reponse
+    evaluation.date_reponse = timezone.now()
+    evaluation.save()
+
+    Notification.objects.create(
+        destinataire=evaluation.client,
+        type='nouvel_avis',
+        message=f"{request.user.username} a répondu à votre avis",
+        lien='dashboard',
+    )
+
+    return Response(EvaluationSerializer(evaluation).data)
 
 # ================================
 # CONVERSATIONS & MESSAGES
@@ -530,6 +600,7 @@ def conversations_list(request):
 
 @api_view(['GET', 'POST'])
 @permission_classes([IsAuthenticated])
+@throttle_classes([MessageRateThrottle])
 def messages_list(request, conversation_id):
     try:
         conversation = Conversation.objects.get(pk=conversation_id)
@@ -625,3 +696,155 @@ def notification_marquer_lue(request, pk):
 def notifications_tout_marquer_lu(request):
     Notification.objects.filter(destinataire=request.user, lu=False).update(lu=True)
     return Response({'message': 'Toutes les notifications ont été marquées comme lues'})
+
+
+# ================================
+# FAVORIS
+# ================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_favori_artisan(request, artisan_id):
+    """Le client ajoute/retire un artisan de ses favoris (bascule)."""
+    if request.user.role != 'client':
+        return Response({'error': 'Seul un client peut avoir des artisans favoris'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        artisan = User.objects.get(pk=artisan_id, role='artisan')
+    except User.DoesNotExist:
+        return Response({'error': 'Artisan introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    favori, created = FavoriArtisan.objects.get_or_create(client=request.user, artisan=artisan)
+    if not created:
+        favori.delete()
+        return Response({'est_favori': False})
+    return Response({'est_favori': True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mes_favoris_artisans(request):
+    """Liste des artisans favoris du client connecté."""
+    if request.user.role != 'client':
+        return Response({'error': 'Seul un client peut avoir des artisans favoris'}, status=status.HTTP_403_FORBIDDEN)
+    artisans = User.objects.filter(suivi_par__client=request.user).order_by('-suivi_par__date_creation')
+    serializer = ArtisanPublicSerializer(artisans, many=True, context={'request': request})
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_favori_demande(request, demande_id):
+    """L'artisan sauvegarde/retire une demande de ses favoris (bascule)."""
+    if request.user.role != 'artisan':
+        return Response({'error': 'Seul un artisan peut sauvegarder des demandes'}, status=status.HTTP_403_FORBIDDEN)
+    try:
+        demande = Demande.objects.get(pk=demande_id)
+    except Demande.DoesNotExist:
+        return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    favori, created = FavoriDemande.objects.get_or_create(artisan=request.user, demande=demande)
+    if not created:
+        favori.delete()
+        return Response({'est_favori': False})
+    return Response({'est_favori': True})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def mes_favoris_demandes(request):
+    """Liste des demandes sauvegardées par l'artisan connecté."""
+    if request.user.role != 'artisan':
+        return Response({'error': 'Seul un artisan peut sauvegarder des demandes'}, status=status.HTTP_403_FORBIDDEN)
+    demandes = Demande.objects.filter(favorisee_par__artisan=request.user).order_by('-favorisee_par__date_creation')
+    serializer = DemandeSerializer(demandes, many=True, context={'request': request})
+    return Response(serializer.data)
+
+# ================================
+# VÉRIFICATION D'IDENTITÉ ARTISAN
+# ================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def soumettre_verification(request):
+    """L'artisan soumet un document (CIN, matricule fiscal...) pour vérification."""
+    if request.user.role != 'artisan':
+        return Response({'error': 'Seul un artisan peut soumettre une vérification'}, status=status.HTTP_403_FORBIDDEN)
+
+    document = request.FILES.get('document_verification')
+    if not document:
+        return Response({'error': 'Aucun document fourni'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.user.statut_verification == 'verifie':
+        return Response({'error': 'Votre profil est déjà vérifié'}, status=status.HTTP_400_BAD_REQUEST)
+
+    request.user.document_verification = document
+    request.user.statut_verification = 'en_attente'
+    request.user.date_soumission_verification = timezone.now()
+    request.user.motif_rejet = ''
+    request.user.save()
+
+    return Response({
+        'statut_verification': request.user.statut_verification,
+        'date_soumission_verification': request.user.date_soumission_verification,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def verifications_en_attente(request):
+    """Liste des artisans en attente de validation (réservé au staff Django admin)."""
+    artisans = User.objects.filter(role='artisan', statut_verification='en_attente').order_by('date_soumission_verification')
+    data = [
+        {
+            'id': a.id,
+            'username': a.username,
+            'specialite': a.specialite,
+            'date_soumission_verification': a.date_soumission_verification,
+            'document_verification': request.build_absolute_uri(a.document_verification.url) if a.document_verification else None,
+        }
+        for a in artisans
+    ]
+    return Response(data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def approuver_verification(request, artisan_id):
+    """Le staff approuve la vérification d'un artisan."""
+    try:
+        artisan = User.objects.get(pk=artisan_id, role='artisan')
+    except User.DoesNotExist:
+        return Response({'error': 'Artisan introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    artisan.statut_verification = 'verifie'
+    artisan.date_traitement_verification = timezone.now()
+    artisan.motif_rejet = ''
+    artisan.save()
+
+    Notification.objects.create(
+        destinataire=artisan, type='verification',
+        message="Votre identité a été vérifiée ! Le badge Vérifié est maintenant visible sur votre profil.",
+        lien='profil',
+    )
+    return Response({'statut_verification': artisan.statut_verification})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def rejeter_verification(request, artisan_id):
+    """Le staff rejette la vérification d'un artisan, avec un motif optionnel."""
+    try:
+        artisan = User.objects.get(pk=artisan_id, role='artisan')
+    except User.DoesNotExist:
+        return Response({'error': 'Artisan introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    motif = request.data.get('motif', '').strip()
+    artisan.statut_verification = 'rejete'
+    artisan.date_traitement_verification = timezone.now()
+    artisan.motif_rejet = motif or "Document illisible ou non conforme."
+    artisan.save()
+
+    Notification.objects.create(
+        destinataire=artisan, type='verification',
+        message=f"Votre demande de vérification a été refusée : {artisan.motif_rejet}",
+        lien='profil',
+    )
+    return Response({'statut_verification': artisan.statut_verification, 'motif_rejet': artisan.motif_rejet})

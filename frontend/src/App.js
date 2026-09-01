@@ -10,6 +10,7 @@ import Dashboard from './pages/Dashboard';
 import DashboardArtisan from './pages/DashboardArtisan';
 import NouvelleDemande from './pages/NouvelleDemande';
 import ArtisansListe from './pages/ArtisansListe';
+import ArtisanProfile from './pages/ArtisanProfile';
 import Messages from './pages/Messages';
 import NotFound from './pages/NotFound';
 
@@ -32,6 +33,7 @@ function App() {
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/artisans" element={<ArtisansListe />} />
+        <Route path="/artisans/:id" element={<ArtisanProfile />} />
         <Route path="/login" element={<Login />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password/:uidb64/:token" element={<ResetPassword />} />

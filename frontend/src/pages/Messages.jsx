@@ -175,8 +175,12 @@ const Messages = () => {
       setMessages((prev) => [...prev, res.data]);
       setTexte('');
       chargerConversations();
-    } catch {
-      setErreur("Le message n'a pas pu être envoyé — réessaie");
+    } catch (err) {
+      if (err.response?.status === 429) {
+        setErreur('Trop de messages envoyés récemment. Merci de patienter une minute.');
+      } else {
+        setErreur("Le message n'a pas pu être envoyé — réessaie");
+      }
     } finally {
       setEnvoiEnCours(false);
     }
@@ -203,8 +207,12 @@ const Messages = () => {
           });
           setMessages((prev) => [...prev, res.data]);
           chargerConversations();
-        } catch {
-          setErreur("La position n'a pas pu être envoyée — réessaie");
+        } catch (err) {
+          if (err.response?.status === 429) {
+            setErreur('Trop de messages envoyés récemment. Merci de patienter une minute.');
+          } else {
+            setErreur("La position n'a pas pu être envoyée — réessaie");
+          }
         } finally {
           setEnvoiPositionEnCours(false);
         }
