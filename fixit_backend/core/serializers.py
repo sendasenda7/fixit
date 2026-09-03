@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
 from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
 from .geo import haversine_km
-from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification, FavoriArtisan, FavoriDemande
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification, FavoriArtisan, FavoriDemande, Signalement
 # ================================
 # SERIALIZER USER
 # ================================
@@ -25,11 +25,13 @@ class UserSerializer(serializers.ModelSerializer):
             'statut_verification',
             'date_soumission_verification',
             'motif_rejet',
+            'is_staff',
         ]
         extra_kwargs = {
             'statut_verification': {'read_only': True},
             'date_soumission_verification': {'read_only': True},
             'motif_rejet': {'read_only': True},
+            'is_staff': {'read_only': True},
         }
 
     def validate(self, data):
@@ -344,3 +346,25 @@ class NotificationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Notification
         fields = ['id', 'type', 'message', 'lien', 'lu', 'date_creation']
+        
+# ================================
+# SERIALIZER SIGNALEMENT
+# ================================
+class SignalementSerializer(serializers.ModelSerializer):
+    auteur_nom = serializers.CharField(source='auteur.username', read_only=True)
+    utilisateur_signale_nom = serializers.CharField(source='utilisateur_signale.username', read_only=True, default=None)
+    demande_signalee_titre = serializers.CharField(source='demande_signalee.titre', read_only=True, default=None)
+
+    class Meta:
+        model = Signalement
+        fields = [
+            'id', 'auteur', 'auteur_nom', 'utilisateur_signale', 'utilisateur_signale_nom',
+            'demande_signalee', 'demande_signalee_titre', 'motif', 'description',
+            'statut', 'date_creation', 'date_traitement',
+        ]
+        extra_kwargs = {
+            'auteur': {'read_only': True},
+            'utilisateur_signale': {'read_only': True},
+            'demande_signalee': {'read_only': True},
+            'statut': {'read_only': True},
+        }

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import NotificationBell from './NotificationBell';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Ferme le menu mobile après un clic sur un lien (évite de rester coincé ouvert)
@@ -38,11 +40,23 @@ const Navbar = () => {
       </ul>
 
       <div className="navbar-buttons" style={styles.navButtons}>
+        <button
+          type="button"
+          onClick={toggleDarkMode}
+          aria-label={darkMode ? 'Passer en mode clair' : 'Passer en mode sombre'}
+          style={styles.themeToggle}
+        >
+          {darkMode ? '☀️' : '🌙'}
+        </button>
         {user ? (
           <>
             <NotificationBell />
+
             {user.role === 'artisan' && (
               <Link to={`/artisans/${user.id}`} style={styles.btnLogin} onClick={closeMenu}>Mon profil</Link>
+            )}
+            {user.is_staff && (
+              <Link to="/admin-dashboard" style={styles.btnLogin} onClick={closeMenu}>🛠️ Admin</Link>
             )}
             <Link to="/dashboard" style={styles.btnLogin}>Tableau de bord</Link>
             <button
@@ -99,6 +113,10 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
+  },
+    themeToggle: {
+    border: 'none', background: 'transparent', cursor: 'pointer',
+    fontSize: '18px', lineHeight: 1, padding: '6px', borderRadius: '50%',
   },
   btnLogin: {
     textDecoration: 'none',

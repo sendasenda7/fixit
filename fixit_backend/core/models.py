@@ -333,3 +333,46 @@ class FavoriDemande(models.Model):
 
     def __str__(self):
         return f"{self.artisan.username} ♥ {self.demande.titre}"
+    
+    
+# ================================
+# MODÈLE SIGNALEMENT (profil ou demande abusive)
+# ================================
+class Signalement(models.Model):
+    MOTIF_CHOICES = [
+        ('spam', 'Spam ou publicité'),
+        ('contenu_inapproprie', 'Contenu inapproprié'),
+        ('arnaque', 'Arnaque ou fraude suspectée'),
+        ('comportement', 'Comportement abusif'),
+        ('autre', 'Autre'),
+    ]
+    STATUT_CHOICES = [
+        ('nouveau', 'Nouveau'),
+        ('traite', 'Traité'),
+        ('rejete', 'Rejeté'),
+    ]
+
+    auteur = models.ForeignKey(User, on_delete=models.CASCADE, related_name='signalements_envoyes')
+
+    # Cible du signalement : soit un utilisateur (profil), soit une demande.
+    # Exactement un des deux doit être renseigné (contrôlé côté vue/serializer,
+    # une contrainte DB stricte serait superflue pour ce cas d'usage).
+    utilisateur_signale = models.ForeignKey(
+        User, on_delete=models.CASCADE, null=True, blank=True, related_name='signalements_recus',
+    )
+    demande_signalee = models.ForeignKey(
+        Demande, on_delete=models.CASCADE, null=True, blank=True, related_name='signalements',
+    )
+
+    motif = models.CharField(max_length=30, choices=MOTIF_CHOICES)
+    description = models.TextField(blank=True, max_length=500)
+    statut = models.CharField(max_length=20, choices=STATUT_CHOICES, default='nouveau')
+    date_creation = models.DateTimeField(auto_now_add=True)
+    date_traitement = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-date_creation']
+
+    def __str__(self):
+        cible = self.utilisateur_signale or self.demande_signalee
+        return f"Signalement de {self.auteur.username} sur {cible} ({self.get_motif_display()})"

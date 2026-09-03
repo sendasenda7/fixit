@@ -7,6 +7,8 @@ import Avatar from '../components/Avatar';
 import StarRating from '../components/StarRating';
 import Navbar from '../components/Navbar';
 import FavoriButton from '../components/FavoriButton';
+import SignalerButton from '../components/SignalerButton';
+import { SkeletonProfile } from '../components/Skeleton';
 
 const ICONES_SERVICE = {
   plomberie: '🚿',
@@ -138,7 +140,7 @@ const ArtisanProfile = () => {
     return (
       <div style={styles.page}>
         <Navbar />
-        <p style={{ textAlign: 'center', color: '#888', padding: '60px 0' }}>Chargement du profil…</p>
+        <SkeletonProfile />
       </div>
     );
   }
@@ -190,6 +192,7 @@ const ArtisanProfile = () => {
             </div>
           </div>
 
+
           {estMonProfil ? (
             <motion.button
               whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
@@ -199,13 +202,22 @@ const ArtisanProfile = () => {
               {editing ? 'Annuler' : '✏️ Modifier mon profil'}
             </motion.button>
           ) : (
-            <motion.button
-              whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-              style={styles.editBtn}
-              onClick={() => navigate('/nouvelle-demande', { state: { type_service: artisan.specialite || undefined } })}
-            >
-              Proposer une demande
-            </motion.button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+              <motion.button
+                whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+                style={styles.editBtn}
+                onClick={() => navigate('/nouvelle-demande', { state: { type_service: artisan.specialite || undefined } })}
+              >
+                Proposer une demande
+              </motion.button>
+              {user && (
+                <SignalerButton
+                  onSubmit={(motif, description) =>
+                    api.post(`/signalements/utilisateur/${artisan.id}/`, { motif, description })
+                  }
+                />
+              )}
+            </div>
           )}
         </motion.div>
 

@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import User, Demande, Offre, Evaluation, FavoriArtisan, FavoriDemande
+from .models import User, Demande, Offre, Evaluation, FavoriArtisan, FavoriDemande, Signalement
 
 
 @admin.register(User)
@@ -35,3 +35,26 @@ admin.site.register(Offre)
 admin.site.register(Evaluation)
 admin.site.register(FavoriArtisan)
 admin.site.register(FavoriDemande)
+
+
+@admin.register(Signalement)
+class SignalementAdmin(admin.ModelAdmin):
+    list_display = ('id', 'auteur', 'motif', 'statut', 'date_creation', 'cible')
+    list_filter = ('statut', 'motif')
+    actions = ['marquer_traite', 'marquer_rejete']
+
+    def cible(self, obj):
+        return obj.utilisateur_signale or obj.demande_signalee
+    cible.short_description = 'Cible'
+
+    @admin.action(description="✅ Marquer comme traité")
+    def marquer_traite(self, request, queryset):
+        from django.utils import timezone
+        maj = queryset.update(statut='traite', date_traitement=timezone.now())
+        self.message_user(request, f"{maj} signalement(s) marqué(s) comme traité(s).")
+
+    @admin.action(description="❌ Rejeter")
+    def marquer_rejete(self, request, queryset):
+        from django.utils import timezone
+        maj = queryset.update(statut='rejete', date_traitement=timezone.now())
+        self.message_user(request, f"{maj} signalement(s) rejeté(s).")

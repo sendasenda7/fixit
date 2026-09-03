@@ -54,6 +54,15 @@ urlpatterns = [
     path('verification/soumettre/', views.soumettre_verification),
     path('verification/en-attente/', views.verifications_en_attente),
     path('verification/<int:artisan_id>/approuver/', views.approuver_verification),
-    path('verification/<int:artisan_id>/rejeter/', views.rejeter_verification),
+        path('verification/<int:artisan_id>/rejeter/', views.rejeter_verification),
+
+    # Signalements
+    path('signalements/utilisateur/<int:user_id>/', views.signaler_utilisateur),
+    path('signalements/demande/<int:demande_id>/', views.signaler_demande),
+    path('signalements/', views.signalements_list),
+    path('signalements/<int:signalement_id>/traiter/', views.traiter_signalement),
+
+    # Dashboard admin
+    path('admin/stats/', views.admin_stats),
 
 ]

@@ -13,6 +13,7 @@ import ArtisansListe from './pages/ArtisansListe';
 import ArtisanProfile from './pages/ArtisanProfile';
 import Messages from './pages/Messages';
 import NotFound from './pages/NotFound';
+import AdminDashboard from './pages/AdminDashboard';
 
 const PrivateRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -46,6 +47,9 @@ function App() {
         } />
         <Route path="/messages" element={
           <PrivateRoute><Messages /></PrivateRoute>
+        } />
+        <Route path="/admin-dashboard" element={
+          <PrivateRoute><AdminDashboard /></PrivateRoute>
         } />
         <Route path="*" element={<NotFound />} />
       </Routes>

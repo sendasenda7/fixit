@@ -13,12 +13,12 @@ from django.conf import settings
 from django.db import models
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
-from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
+from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification, FavoriArtisan, FavoriDemande, Signalement 
 from .serializers import (
     UserSerializer, RegisterSerializer,
     DemandeSerializer, OffreSerializer, EvaluationSerializer,
     ArtisanPublicSerializer, ArtisanDetailSerializer, ConversationSerializer, MessageSerializer,
-    NotificationSerializer
+    NotificationSerializer, SignalementSerializer
 )
 from .pagination import StandardResultsSetPagination
 from .models import User, Demande, Offre, Evaluation, Conversation, Message, Notification
@@ -848,3 +848,136 @@ def rejeter_verification(request, artisan_id):
         lien='profil',
     )
     return Response({'statut_verification': artisan.statut_verification, 'motif_rejet': artisan.motif_rejet})
+
+# ================================
+# SIGNALEMENTS
+# ================================
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def signaler_utilisateur(request, user_id):
+    """Signale un profil (artisan ou client) pour comportement abusif."""
+    if user_id == request.user.id:
+        return Response({'error': 'Vous ne pouvez pas vous signaler vous-même'}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+        cible = User.objects.get(pk=user_id)
+    except User.DoesNotExist:
+        return Response({'error': 'Utilisateur introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if Signalement.objects.filter(auteur=request.user, utilisateur_signale=cible, statut='nouveau').exists():
+        return Response({'error': 'Vous avez déjà signalé ce profil, votre signalement est en cours de traitement.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    motif = request.data.get('motif')
+    if motif not in dict(Signalement.MOTIF_CHOICES):
+        return Response({'error': 'Motif invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+    signalement = Signalement.objects.create(
+        auteur=request.user, utilisateur_signale=cible,
+        motif=motif, description=request.data.get('description', '').strip()[:500],
+    )
+    return Response(SignalementSerializer(signalement).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def signaler_demande(request, demande_id):
+    """Signale une demande (contenu inapproprié, arnaque suspectée...)."""
+    try:
+        demande = Demande.objects.get(pk=demande_id)
+    except Demande.DoesNotExist:
+        return Response({'error': 'Demande introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    if demande.client == request.user:
+        return Response({'error': 'Vous ne pouvez pas signaler votre propre demande'}, status=status.HTTP_400_BAD_REQUEST)
+
+    if Signalement.objects.filter(auteur=request.user, demande_signalee=demande, statut='nouveau').exists():
+        return Response({'error': 'Vous avez déjà signalé cette demande, elle est en cours de traitement.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    motif = request.data.get('motif')
+    if motif not in dict(Signalement.MOTIF_CHOICES):
+        return Response({'error': 'Motif invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+    signalement = Signalement.objects.create(
+        auteur=request.user, demande_signalee=demande,
+        motif=motif, description=request.data.get('description', '').strip()[:500],
+    )
+    return Response(SignalementSerializer(signalement).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def signalements_list(request):
+    """Liste des signalements pour le staff, filtrable par statut (?statut=nouveau)."""
+    qs = Signalement.objects.select_related('auteur', 'utilisateur_signale', 'demande_signalee').all()
+    statut = request.query_params.get('statut')
+    if statut:
+        qs = qs.filter(statut=statut)
+    return Response(SignalementSerializer(qs, many=True).data)
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def traiter_signalement(request, signalement_id):
+    """Le staff marque un signalement comme traité ou rejeté."""
+    try:
+        signalement = Signalement.objects.get(pk=signalement_id)
+    except Signalement.DoesNotExist:
+        return Response({'error': 'Signalement introuvable'}, status=status.HTTP_404_NOT_FOUND)
+
+    nouveau_statut = request.data.get('statut')
+    if nouveau_statut not in ('traite', 'rejete'):
+        return Response({'error': "Statut invalide (attendu : 'traite' ou 'rejete')"}, status=status.HTTP_400_BAD_REQUEST)
+
+    signalement.statut = nouveau_statut
+    signalement.date_traitement = timezone.now()
+    signalement.save()
+    return Response(SignalementSerializer(signalement).data)
+
+# ================================
+# DASHBOARD ADMIN
+# ================================
+@api_view(['GET'])
+@permission_classes([IsAdminUser])
+def admin_stats(request):
+    """Statistiques globales de la plateforme, réservées au staff."""
+    from django.db.models import Avg, Count
+    from datetime import timedelta
+
+    total_clients = User.objects.filter(role='client').count()
+    total_artisans = User.objects.filter(role='artisan').count()
+
+    demandes_par_statut = {
+        row['statut']: row['n']
+        for row in Demande.objects.values('statut').annotate(n=Count('id'))
+    }
+
+    note_moyenne_globale = Evaluation.objects.aggregate(m=Avg('note'))['m']
+
+    # Répartition des demandes par service, pour un mini-graphique en barres
+    demandes_par_service = list(
+        Demande.objects.values('type_service').annotate(n=Count('id')).order_by('-n')
+    )
+
+    # Nouvelles inscriptions sur les 7 derniers jours (pour une petite tendance)
+    aujourd_hui = timezone.now().date()
+    inscriptions_7j = []
+    for i in range(6, -1, -1):
+        jour = aujourd_hui - timedelta(days=i)
+        n = User.objects.filter(date_joined__date=jour).count()
+        inscriptions_7j.append({'date': jour.isoformat(), 'n': n})
+
+    return Response({
+        'total_utilisateurs': total_clients + total_artisans,
+        'total_clients': total_clients,
+        'total_artisans': total_artisans,
+        'artisans_verifies': User.objects.filter(role='artisan', statut_verification='verifie').count(),
+        'verifications_en_attente': User.objects.filter(role='artisan', statut_verification='en_attente').count(),
+        'demandes_par_statut': demandes_par_statut,
+        'total_demandes': Demande.objects.count(),
+        'total_offres': Offre.objects.count(),
+        'missions_terminees': Demande.objects.filter(statut='terminee').count(),
+        'note_moyenne_globale': round(note_moyenne_globale, 2) if note_moyenne_globale else None,
+        'total_avis': Evaluation.objects.count(),
+        'signalements_en_attente': Signalement.objects.filter(statut='nouveau').count(),
+        'demandes_par_service': demandes_par_service,
+        'inscriptions_7j': inscriptions_7j,
+    })

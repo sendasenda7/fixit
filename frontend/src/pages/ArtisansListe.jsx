@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import Pagination from '../components/Pagination';
+import { SkeletonCard } from '../components/Skeleton';
 import Navbar from '../components/Navbar';
 import FavoriButton from '../components/FavoriButton';
 
@@ -115,7 +116,7 @@ const ArtisansListe = () => {
 
       <div style={styles.grid}>
         {loading ? (
-          <p style={{ textAlign: 'center', color: '#888', gridColumn: '1 / -1' }}>Chargement…</p>
+          Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)
         ) : erreur ? (
           <div style={{ textAlign: 'center', gridColumn: '1 / -1', padding: '60px 0' }}>
             <p style={{ fontSize: '40px', margin: 0 }}>⚠️</p>

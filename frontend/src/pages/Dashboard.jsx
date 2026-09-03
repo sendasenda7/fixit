@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import NotificationBell from '../components/NotificationBell';
@@ -10,6 +11,8 @@ import Modal from '../components/Modal';
 import FormField from '../components/FormField';
 import StatusTimeline from '../components/StatusTimeline';
 import FavoriButton from '../components/FavoriButton';
+import { SkeletonRowList, SkeletonCardGrid } from '../components/Skeleton';
+import { genererPdfMission } from '../utils/missionPdf';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -58,7 +61,7 @@ const OffresDemande = ({ demande, theme, index, onEvaluer }) => {
           {demande.statut === 'en_cours' ? '🔄 En cours' : '🟢 Ouverte'}
         </span>
       </h3>
-      {loading ? <p style={{ color: theme.subtext }}>Chargement des offres...</p>
+      {loading ? <SkeletonRowList count={2} />
        : offres.length === 0 ? (
         <div style={{ padding: '20px', textAlign: 'center', color: theme.subtext }}>
           ⏳ Aucune offre reçue pour l'instant
@@ -121,10 +124,10 @@ const specialitesDisponibles = [
 const Dashboard = () => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuth();
+  const { darkMode, toggleDarkMode } = useTheme();
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
-  const [darkMode, setDarkMode] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // sidebar mobile (fermée par défaut)
 
   // Évaluations
@@ -221,6 +224,33 @@ const Dashboard = () => {
   const [specialiteChoisie, setSpecialiteChoisie] = useState('');
   const [deleteDemandeModal, setDeleteDemandeModal] = useState(null);
     const [timelineModal, setTimelineModal] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const telechargerPdfMission = async (demande) => {
+    setPdfLoading(true);
+    try {
+      const res = await api.get(`/offres/demande/${demande.id}/`);
+      const offreAcceptee = res.data.find((o) => o.est_acceptee);
+      genererPdfMission({
+        titre: demande.titre,
+        description: demande.description,
+        localisation: demande.localisation,
+        typeService: demande.type_service,
+        budget: demande.budget,
+        prixFinal: offreAcceptee?.prix_propose,
+        clientNom: user.username,
+        artisanNom: offreAcceptee?.artisan_nom,
+        dateCreation: demande.date_creation,
+        dateDebut: demande.date_debut,
+        dateFin: demande.date_fin,
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Le PDF n\'a pas pu être généré. Réessaie.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
   const [deleteDemandeLoading, setDeleteDemandeLoading] = useState(false);
 
   const confirmerSuppressionDemande = async () => {
@@ -550,7 +580,7 @@ const Dashboard = () => {
         </motion.button>
       </div>
       {loading ? (
-        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+        <SkeletonRowList count={4} />
       ) : demandes.length === 0 ? (
         <div style={styles.emptyBox}>
           <p style={{ fontSize: '40px' }}>📭</p>
@@ -597,7 +627,7 @@ const Dashboard = () => {
     const renderFavoris = () => (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
       {favorisLoading ? (
-        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+        <SkeletonCardGrid count={3} minWidth="220px" />
       ) : favoris.length === 0 ? (
         <div style={styles.emptyBox}>
           <p style={{ fontSize: '40px' }}>🤍</p>
@@ -738,7 +768,7 @@ const Dashboard = () => {
               label: 'Mode sombre', desc: 'Activer le thème sombre',
               action: (
                 <motion.div style={{ ...styles.toggle, backgroundColor: darkMode ? '#1a73e8' : '#ccc' }}
-                  onClick={() => setDarkMode(!darkMode)} whileTap={{ scale: 0.95 }}>
+                  onClick={toggleDarkMode} whileTap={{ scale: 0.95 }}>
                   <motion.div style={styles.toggleKnob} animate={{ x: darkMode ? 22 : 2 }}
                     transition={{ type: 'spring', stiffness: 500 }} />
                 </motion.div>
@@ -1071,6 +1101,20 @@ const Dashboard = () => {
           📍 {timelineModal?.localisation} · 💰 {timelineModal?.budget} TND
         </p>
         {timelineModal && <StatusTimeline demande={timelineModal} />}
+        {timelineModal?.statut === 'terminee' && (
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => telechargerPdfMission(timelineModal)}
+            disabled={pdfLoading}
+            style={{
+              width: '100%', marginTop: '18px', border: 'none', backgroundColor: '#1a73e8', color: '#fff',
+              padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+              opacity: pdfLoading ? 0.6 : 1,
+            }}
+          >
+            {pdfLoading ? 'Génération…' : '📄 Télécharger le récapitulatif (PDF)'}
+          </motion.button>
+        )}
       </Modal>
 
       <div style={{ ...styles.container, backgroundColor: theme.bg }}>

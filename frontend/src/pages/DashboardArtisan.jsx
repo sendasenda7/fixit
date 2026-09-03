@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid, ResponsiveContainer } from 'recharts';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import StarRating from '../components/StarRating';
 import Avatar from '../components/Avatar';
 import Pagination from '../components/Pagination';
@@ -13,6 +14,9 @@ import FormField from '../components/FormField';
 import DemandesMap from '../components/DemandesMap';
 import StatusTimeline from '../components/StatusTimeline';
 import FavoriButton from '../components/FavoriButton';
+import SignalerButton from '../components/SignalerButton';
+import { SkeletonCardGrid, SkeletonRowList } from '../components/Skeleton';
+import { genererPdfMission } from '../utils/missionPdf';
 const specialites = [
   { id: 'plomberie', icon: '🚿', label: 'Plomberie' },
   { id: 'electricite', icon: '⚡', label: 'Électricité' },
@@ -27,6 +31,14 @@ const specialites = [
 const DashboardArtisan = () => {
   const navigate = useNavigate();
   const { user, logout, updateUser } = useAuth();
+  const { darkMode } = useTheme();
+  const theme = {
+    bg: darkMode ? '#0f0f1a' : '#f4f6fb',
+    card: darkMode ? '#1e1e30' : '#ffffff',
+    text: darkMode ? '#ffffff' : '#1a1a2e',
+    subtext: darkMode ? '#aaaaaa' : '#888888',
+    border: darkMode ? '#2a2a3e' : '#f0f0f0',
+  };
   const [demandes, setDemandes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState('dashboard');
@@ -97,6 +109,33 @@ const DashboardArtisan = () => {
   const [demandesCarte, setDemandesCarte] = useState([]);
   const [chargementCarte, setChargementCarte] = useState(false);
   const [timelineModal, setTimelineModal] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  const telechargerPdfMission = async (offre) => {
+    setPdfLoading(true);
+    try {
+      const res = await api.get(`/demandes/${offre.demande}/`);
+      const demande = res.data;
+      genererPdfMission({
+        titre: demande.titre,
+        description: demande.description,
+        localisation: demande.localisation,
+        typeService: demande.type_service,
+        budget: demande.budget,
+        prixFinal: offre.prix_propose,
+        clientNom: demande.client_nom,
+        artisanNom: offre.artisan_nom,
+        dateCreation: demande.date_creation,
+        dateDebut: demande.date_debut,
+        dateFin: demande.date_fin,
+      });
+    } catch (err) {
+      console.error(err);
+      alert('Le PDF n\'a pas pu être généré. Réessaie.');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
     // Favoris (demandes sauvegardées)
   const [favorisDemandes, setFavorisDemandes] = useState([]);
   const [favorisDemandesLoading, setFavorisDemandesLoading] = useState(true);
@@ -383,7 +422,7 @@ const DashboardArtisan = () => {
         </div>
 
             {loading ? (
-        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+        <SkeletonCardGrid count={6} minWidth="280px" />
       ) : demandes.length === 0 ? (
         <div style={styles.emptyBox}>
           <p style={{ fontSize: '40px' }}>📭</p>
@@ -446,6 +485,13 @@ const DashboardArtisan = () => {
                     </motion.button>
                   )}
                 </div>
+                <div style={{ textAlign: 'right', marginTop: '4px' }}>
+                  <SignalerButton
+                    onSubmit={(motif, description) =>
+                      api.post(`/signalements/demande/${d.id}/`, { motif, description })
+                    }
+                  />
+                </div>
               </motion.div>
             );
           })}
@@ -471,7 +517,7 @@ const DashboardArtisan = () => {
     const renderFavoris = () => (
     <div>
       {favorisDemandesLoading ? (
-        <div style={styles.emptyBox}><p>⏳ Chargement...</p></div>
+        <SkeletonCardGrid count={3} minWidth="280px" />
       ) : favorisDemandes.length === 0 ? (
         <div style={styles.emptyBox}>
           <p style={{ fontSize: '40px' }}>🤍</p>
@@ -842,7 +888,7 @@ const DashboardArtisan = () => {
       <div style={{ ...styles.profileCard, marginTop: '20px' }}>
         <h3 style={{ fontSize: '16px', fontWeight: '800', margin: '0 0 15px' }}>⭐ Mes évaluations</h3>
         {evalLoading ? (
-          <p style={{ color: '#888' }}>⏳ Chargement...</p>
+          <SkeletonRowList count={3} />
         ) : totalNotes === 0 ? (
           <p style={{ color: '#888' }}>Vous n'avez pas encore reçu d'évaluation.</p>
         ) : (
@@ -905,7 +951,7 @@ const DashboardArtisan = () => {
   };
 
   return (
-    <div style={styles.container}>
+    <div style={{ ...styles.container, backgroundColor: theme.bg }}>
       {/* MODAL OFFRE */}
       <Modal open={!!offreModal} onClose={() => setOffreModal(null)}
         title="💼 Soumettre une offre">
@@ -1043,6 +1089,20 @@ const DashboardArtisan = () => {
             date_fin: timelineModal.demande_date_fin,
           }} />
         )}
+        {timelineModal?.demande_statut === 'terminee' && (
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => telechargerPdfMission(timelineModal)}
+            disabled={pdfLoading}
+            style={{
+              width: '100%', marginTop: '18px', border: 'none', backgroundColor: '#1a73e8', color: '#fff',
+              padding: '12px', borderRadius: '10px', fontSize: '13px', fontWeight: '700', cursor: 'pointer',
+              opacity: pdfLoading ? 0.6 : 1,
+            }}
+          >
+            {pdfLoading ? 'Génération…' : '📄 Télécharger le récapitulatif (PDF)'}
+          </motion.button>
+        )}
       </Modal>
 
       {/* Overlay mobile */}
@@ -1109,7 +1169,7 @@ const DashboardArtisan = () => {
             </button>
             <div>
               <p style={styles.eyebrow}>ESPACE ARTISAN</p>
-              <h1 style={styles.headerTitle}>
+              <h1 style={{ ...styles.headerTitle, color: theme.text }}>
                 {activeMenu === 'dashboard' && `Bonjour, ${user.username}`}
                 {activeMenu === 'demandes' && 'Demandes disponibles'}
                 {activeMenu === 'mes_offres' && 'Mes offres'}
